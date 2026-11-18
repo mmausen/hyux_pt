@@ -1,7 +1,7 @@
 // The client-safe subset of config.js served at /api/config.
 // Never include: participant IDs, the system prompt, model names, task-selection lists, the completion code.
 
-export function buildClientConfig({ config, env }) {
+export function buildClientConfig({ config, env, modes }) {
   const { flow } = config;
   const enabled = (s) => !(s in flow.enabled) || flow.enabled[s];
   return {
@@ -25,6 +25,6 @@ export function buildClientConfig({ config, env }) {
     },
     survey: { type: config.survey.type, externalUrl: config.survey.type === 'external' ? config.survey.externalUrl : null },
     limits: { maxAudioUploadMB: config.limits.maxAudioUploadMB },
-    dev: env.devMode ? { timerSpeeds: config.dev.timerSpeeds } : undefined,
+    dev: env.devMode ? { timerSpeeds: config.dev.timerSpeeds, modes } : undefined,
   };
 }

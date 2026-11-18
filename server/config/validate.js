@@ -88,6 +88,8 @@ export function validateConfig(config, { tasks, modes, hasApiKey, devMode }) {
   num('ai.maxOutputTokens', { min: 16, max: 128000, int: true });
   bool('ai.sendHistory');
   num('ai.timeoutSeconds', { min: 5, max: 600 });
+  str('ai.intents.extractPrompt'); str('ai.intents.annotatePrompt'); str('ai.intents.reviseInstruction');
+  num('ai.intents.maxOutputTokens', { min: 64, max: 32000, int: true });
 
   // stt
   str('stt.model');

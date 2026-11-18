@@ -49,7 +49,7 @@ export function createSessionStore({ dir }) {
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
 
-    async create({ participantId, isDev = false, plan, dev }) {
+    async create({ participantId, isDev = false, plan, mode, dev }) {
       const now = new Date().toISOString();
       const session = {
         id: randomUUID(),
@@ -59,6 +59,7 @@ export function createSessionStore({ dir }) {
         updatedAt: now,
         completedAt: null,
         plan, // task ID per round, index 0 = round 1
+        mode, // interaction mode (public/js/modes/<mode>), fixed for the session; dev panel can change it
         state: {}, // owned by the browser
         rounds: {}, // round number -> { turns: [...] }, owned by the server
         dev: dev ?? null,

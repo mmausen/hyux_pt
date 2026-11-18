@@ -10,7 +10,7 @@ export default function create() {
   let dialog = null;
 
   return {
-    mount(container, ctx) {
+    async mount(container, ctx) {
       const { round } = ctx.step;
       const task = ctx.session.task(round);
       const timer = ctx.config.timer;
@@ -18,7 +18,8 @@ export default function create() {
       // Already confirmed (e.g. dev jump back): go straight on.
       if (ctx.session.progress(round).taskStartedAt) return ctx.flow.next();
 
-      canvas = ctx.mode.createCanvas(ctx, { round, task, live: false, conceal: true });
+      const mode = await ctx.getMode();
+      canvas = mode.createCanvas(ctx, { round, task, live: false, conceal: true });
       container.append(h('div.app-canvas-host', canvas.el));
 
       const timerText = {
@@ -29,7 +30,7 @@ export default function create() {
 
       const start = async () => {
         await ctx.session.updateProgress(round, { taskId: task.id, taskStartedAt: Date.now() }, { immediate: true });
-        logEvent('task.started', { title: task.title, timeLimitMinutes: task.timeLimitMinutes, timerMode: timer.mode });
+        logEvent('task.started', { title: task.title, timeLimitMinutes: task.timeLimitMinutes, timerMode: timer.mode, mode: mode.name });
         dialog.close();
         dialog = null;
         ctx.flow.next();

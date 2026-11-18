@@ -41,7 +41,13 @@ export default {
   },
 
   interaction: {
-    mode: 'voice', // folder in public/js/modes/
+    // Default interaction mode for new sessions (a folder in public/js/modes/). In dev mode the dev panel
+    // can switch the current session.
+    //   'voice'   : spoken instructions build the instruction; each send goes to the AI with the history.
+    //   'intents' : the first instruction is sent as spoken; after that, each recording is split into
+    //               intent cards that can be switched off or changed by voice; a send hands the AI only
+    //               the active intents and the latest draft.
+    mode: 'intents',
     recordingMode: 'pushToTalk', // 'pushToTalk' (hold button or Space) | 'toggle' (click to start, click to stop)
     maxRecordingSeconds: 60,
   },
@@ -71,6 +77,26 @@ export default {
     maxOutputTokens: 1500,
     sendHistory: true, // include earlier turns of the current task
     timeoutSeconds: 60, // also used for the AI check in the system check
+    // Prompts of the 'intents' mode. The base systemPrompt above is used for writing the draft; these
+    // are separate calls. The model never sees the task here either.
+    intents: {
+      extractPrompt:
+        'You turn a spoken comment about a draft into intents: short, self-contained change requests for ' +
+        'the draft. The comment was transcribed automatically and may contain recognition errors. ' +
+        'Split the comment into one intent per distinct request; most comments contain one or two. ' +
+        'Write each intent as an imperative in at most 12 words, in the language of the comment ' +
+        '(for example "Mention the six-week rollout"). Resolve references such as "that part" using the ' +
+        'draft. Leave out filler and thinking aloud. If the comment contains no request, return no intents.',
+      annotatePrompt:
+        'You update one intent (a short change request for a draft) according to a spoken annotation. ' +
+        'The annotation was transcribed automatically and may contain recognition errors. Return the ' +
+        'updated intent as an imperative in at most 12 words, in the language of the intent. If the ' +
+        'annotation replaces the intent, return the new one; if it adds a detail, merge it.',
+      reviseInstruction:
+        'Revise the current draft below so that it follows every intent in the list. Keep everything ' +
+        'the intents do not ask to change. Answer with the full revised draft only.',
+      maxOutputTokens: 600, // for extracting and annotating intents
+    },
   },
 
   stt: {

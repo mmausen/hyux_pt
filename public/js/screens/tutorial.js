@@ -1,6 +1,7 @@
 // Tutorial: a coach-mark tour over the real canvas in a non-live state, then (tutorial.practiceTurn)
 // one practice instruction with real recording and a real AI response. The steps come from the
-// interaction mode (ctx.mode.tutorialSteps), so another mode brings its own tour.
+// interaction mode (tutorialSteps), so another mode brings its own tour. The sample content
+// (tutorial.sample) holds what every mode needs; a mode ignores what it does not use.
 import { h, clear, messageStrip } from '../core/dom.js';
 import { t, raw } from '../core/strings.js';
 import { logEvent } from '../core/logEvent.js';
@@ -16,7 +17,9 @@ export default function create() {
 
   return {
     async mount(container, ctx) {
-      const { config, session, mode } = ctx;
+      const { config, session } = ctx;
+      const mode = await ctx.getMode();
+      if (gone) return;
       const host = h('div.app-canvas-host');
       container.append(host);
 
@@ -62,7 +65,7 @@ export default function create() {
         round: PRACTICE_ROUND,
         task: sample.task,
         live: false,
-        sample: { turns: sample.turns.map((x) => ({ ...x, sentAt: now, status: 'done' })), draft: sample.draft },
+        sample: { turns: sample.turns.map((x) => ({ ...x, sentAt: now, respondedAt: now, status: 'done' })), draft: sample.draft, intents: sample.intents ?? [] },
       });
       host.append(canvas.el);
 

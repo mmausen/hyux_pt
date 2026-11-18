@@ -15,9 +15,10 @@ export function devRoutes(app) {
       participantId: pid,
       isDev: true,
       plan: assignTasks(pid, config),
+      mode: config.interaction.mode,
       dev: { mock: { stt: config.dev.mockByDefault, llm: config.dev.mockByDefault } },
     });
-    logger.write({ participantId: session.participantId, sessionId: session.id, type: 'session.started', payload: { dev: true, plan: session.plan } });
+    logger.write({ participantId: session.participantId, sessionId: session.id, type: 'session.started', payload: { dev: true, plan: session.plan, mode: session.mode } });
     res.status(201).json(sessionView(session, app));
   });
 
@@ -27,6 +28,16 @@ export function devRoutes(app) {
       s.dev = { ...(s.dev ?? {}), mock: { stt: Boolean(stt), llm: Boolean(llm) } };
     });
     res.json({ mock: req.study.dev.mock });
+  });
+
+  // Interaction mode of the current session (default: interaction.mode in config.js).
+  r.put('/mode', requireSession(store), async (req, res) => {
+    const mode = req.body?.mode;
+    if (!app.modes.includes(mode)) return res.status(400).json({ error: 'bad_mode' });
+    const from = req.study.mode ?? config.interaction.mode;
+    await store.update(req.study, (s) => { s.mode = mode; });
+    logger.forSession(req.study).write('session.modeChanged', { from, to: mode, via: 'dev' });
+    res.json({ mode });
   });
 
   return r;

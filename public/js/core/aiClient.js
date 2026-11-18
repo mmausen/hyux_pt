@@ -2,13 +2,14 @@
 import { getSessionId, ApiError } from './api.js';
 
 // Returns the stored turn { n, transcript, response, sentAt, respondedAt, ... }.
-export async function sendChat({ round, text, onDelta, signal }) {
+// body: extra request fields, e.g. { intentIds } in the intents mode (see server/routes/chat.js).
+export async function sendChat({ round, text, body = {}, onDelta, signal }) {
   let res;
   try {
     res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Session-Id': getSessionId() ?? '' },
-      body: JSON.stringify({ round, text }),
+      body: JSON.stringify({ ...body, round, text }),
       signal,
     });
   } catch (e) {

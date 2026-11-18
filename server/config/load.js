@@ -52,5 +52,5 @@ export async function loadAll() {
 
   if (problems.length) throw new ConfigError(problems);
 
-  return Object.freeze({ env, config, tasks, tasksById: new Map(tasks.map((t) => [t.id, t])) });
+  return Object.freeze({ env, config, tasks, modes, tasksById: new Map(tasks.map((t) => [t.id, t])) });
 }

@@ -12,6 +12,7 @@ import { logRoutes } from './routes/log.js';
 import { aiRoutes } from './routes/ai.js';
 import { devRoutes } from './routes/dev.js';
 import { chatRoutes } from './routes/chat.js';
+import { intentRoutes } from './routes/intents.js';
 
 let loaded;
 try {
@@ -63,6 +64,7 @@ server.use('/api/session', sessionRoutes(app));
 server.use('/api/log', logRoutes(app));
 server.use('/api', aiRoutes(app));
 server.use('/api/chat', chatRoutes(app));
+server.use('/api/intents', intentRoutes(app));
 if (env.devMode) server.use('/api/dev', devRoutes(app));
 server.use('/api', (req, res) => res.status(404).json({ error: 'not_found' }));
 

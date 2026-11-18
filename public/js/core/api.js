@@ -52,8 +52,15 @@ export const api = {
     form.append('audio', blob, filename);
     return request('POST', '/api/transcribe', { body: form, signal });
   },
+  // Intent cards of the intents mode (server/routes/intents.js).
+  intents: {
+    extract: (round, text, signal) => request('POST', '/api/intents/extract', { json: { round, text }, signal }),
+    annotate: (round, id, text, signal) => request('POST', `/api/intents/${encodeURIComponent(id)}/annotate`, { json: { round, text }, signal }),
+    setActive: (round, id, active) => request('PUT', `/api/intents/${encodeURIComponent(id)}`, { json: { round, active } }),
+  },
   dev: {
     startSession: () => request('POST', '/api/dev/session', { json: {} }),
     setMock: (mock) => request('PUT', '/api/dev/mock', { json: mock }),
+    setMode: (mode) => request('PUT', '/api/dev/mode', { json: { mode } }),
   },
 };

@@ -2,6 +2,8 @@
 // Interface (shared with mock.js):
 //   transcribe({ buffer, mimetype, filename, signal }) -> { text }
 //   respond({ messages, onDelta, signal }) -> { text, usage }
+//   structured({ kind, instructions, input, schema, signal }) -> { data, usage }   (JSON that matches schema;
+//     kind 'extractIntents' | 'annotateIntent' only matters to the mock)
 //   health({ signal }) -> { ok, model }
 import OpenAI, { toFile } from 'openai';
 
@@ -12,10 +14,10 @@ export function createOpenAiService({ config, env }) {
     return client;
   };
 
-  function requestParams(input, { stream, maxOutputTokens = config.ai.maxOutputTokens } = {}) {
+  function requestParams(input, { stream, maxOutputTokens = config.ai.maxOutputTokens, instructions = config.ai.systemPrompt } = {}) {
     const p = {
       model: config.ai.model,
-      instructions: config.ai.systemPrompt,
+      instructions,
       input,
       max_output_tokens: maxOutputTokens,
       store: false,
@@ -50,6 +52,15 @@ export function createOpenAiService({ config, env }) {
         }
       }
       return { text, usage };
+    },
+
+    async structured({ instructions, input, schema, signal }) {
+      const params = requestParams(input, { stream: false, maxOutputTokens: config.ai.intents.maxOutputTokens, instructions });
+      params.text = { format: { type: 'json_schema', name: 'result', schema, strict: true } };
+      const res = await need().responses.create(params, { signal });
+      let data;
+      try { data = JSON.parse(res.output_text ?? ''); } catch { throw new Error('The model did not return valid JSON'); }
+      return { data, usage: res.usage ?? null };
     },
 
     async health({ signal }) {

@@ -77,7 +77,7 @@ post:  end
 | **systemCheck** | Microphone permission, then a level meter. The participant reads the test sentence aloud, the recording is transcribed, and one short LLM call is made. Each check can be retried. After `retriesBeforeContact` failed retries, a contact text appears. |
 | **tutorial** | A guided tour over a sample canvas that highlights one area at a time. Then, if `tutorial.practiceTurn` is on, one real instruction is sent to the assistant. |
 | **briefing** | A dialog over the canvas shows the full scenario (situation and task) and the recommended time limit, so reading does not count toward task time. The task text behind it is hidden. **Start Task** starts the timer. |
-| **task** | The main canvas. The task panel shows the title and the task; **Show Situation** expands the situation (and any materials) again. The participant records an instruction, checks the transcript, and sends it. Only the assistant's latest response is shown (each new one replaces it), with how long ago it was updated. Earlier responses stay stored and logged. The participant keeps going until they select **Finish Task** or time runs out. |
+| **task** | The main canvas of the session's [interaction mode](#interaction-modes). The task panel shows the title and the task; **Show Situation** expands the situation (and any materials) again. Only the assistant's latest response is shown (each new one replaces it), with how long ago it was updated. Earlier responses stay stored and logged. The participant keeps going until they select **Finish Task** or time runs out. |
 | **survey** | The questionnaire about the task, either built in or a link to an external tool. |
 | **interview** | "Conversation Review": a read-only view of the task and every turn with timestamps, to look at together with the interviewer. Off by default. |
 | **end** | Marks the session complete and shows the completion code, if one is set. |
@@ -91,6 +91,20 @@ post:  end
 - answers already given in the questionnaire
 
 The session lives on the server (`sessions/`). The browser only keeps the session ID in `localStorage`. If a participant enters their ID again in another browser, the same session continues there (when `allowReuse` is false).
+
+### Interaction modes
+
+Each session has one interaction mode, set from `interaction.mode` in `config.js` when the session starts (stored with the session, so changing the config later does not affect sessions in progress). In dev mode the dev panel can switch the current session.
+
+**`voice`.** The participant records one or more recordings; their transcripts form the instruction ("Current Instruction", which can be cleared but not typed into). **Send Instruction** sends it. The model gets the earlier turns of the task as history (`ai.sendHistory`).
+
+**`intents`.** The participant thinks aloud, and what they say becomes intents: short change requests for the draft.
+
+1. **First draft.** The first instruction works as in the voice mode: recordings build it, **Send Instruction** sends it as spoken, and the response is the first draft.
+2. **Intent cards.** From then on, each recording is transcribed and the LLM splits it into one or more intents (`ai.intents.extractPrompt`, with the latest draft as context). Each intent becomes a card next to the draft, newest first. A card shows the intent, a tag (**New** = not sent yet, **In Version n** = last sent in that version, **Changed** = changed by voice since it was last sent), an **On/Off** switch, and a **Hold to Change** button. Holding it records an annotation; on release it is transcribed and the LLM rewrites the intent (`ai.intents.annotatePrompt`).
+3. **Send Intents** hands the model only the intents that are on plus the latest draft (`ai.intents.reviseInstruction`), not the history. The response is the next version. The cards stay, so intents that stay on are sent again with every version; new recordings add new cards.
+
+Only one recording runs at a time. While the assistant writes, the cards are locked. The task end waits for running transcriptions, intent extractions and changes. Intents are stored with the session (`rounds[round].intents`) and survive a reload.
 
 ---
 
@@ -138,7 +152,7 @@ The tasks for a session are assigned when it starts and stored with it. Changing
 #### `interaction`
 | Option | Meaning |
 |---|---|
-| `mode` | Folder in `public/js/modes/` (`'voice'`). See [Adding an interaction mode](#adding-an-interaction-mode). |
+| `mode` | Default interaction mode for new sessions (currently `'intents'`): a folder in `public/js/modes/` (`'voice'` or `'intents'`, see [Interaction modes](#interaction-modes)). The dev panel can switch the current session. |
 | `recordingMode` | `'pushToTalk'`: hold the button or the Space key. Space works only when focus isn't in a text field. `'toggle'`: select once to start and again to stop. The tutorial text follows this setting. |
 | `maxRecordingSeconds` | A recording stops automatically after this long and is transcribed. |
 
@@ -167,7 +181,11 @@ Participants see time only as a progress bar under the controls, with no countdo
 | `reasoningEffort` | `null` = not sent. Otherwise `'low'`, `'medium'`, `'high'`, `'xhigh'` or `'max'`. Lower effort gives faster responses. |
 | `maxOutputTokens` | Upper limit for one response. |
 | `sendHistory` | `true`: the earlier turns of the current task are sent with each instruction. |
-| `timeoutSeconds` | A response that takes longer fails with a retry option. Also the time limit for the AI check in the system check. Responses always stream: they appear while they are being written. |
+| `timeoutSeconds` | A response that takes longer fails with a retry option. Also the time limit for the AI check in the system check and for intent calls. Responses always stream: they appear while they are being written. |
+| `intents.extractPrompt` | Intents mode: instructions for splitting a spoken comment into intents. The call returns JSON (`{ intents: [{ text }] }`) and gets the latest draft as context. |
+| `intents.annotatePrompt` | Intents mode: instructions for rewriting one intent from a spoken annotation. Returns JSON (`{ text }`). |
+| `intents.reviseInstruction` | Intents mode: put before the active intents and the latest draft when **Send Intents** is selected. The draft is written with `systemPrompt` as usual. |
+| `intents.maxOutputTokens` | Upper limit for the intent calls. |
 
 #### `stt` (speech-to-text)
 | Option | Meaning |
@@ -284,7 +302,7 @@ export function tutorialSteps({ recordingMode }) { … }    // the tutorial tour
 | `el` | all | Root element; the screen inserts it. |
 | `timerSlot` | task | Element where the task screen puts the timer bar. |
 | `noticeSlot` | task, tutorial | Element for notices (time warnings, practice banner). |
-| `getRegion(name)` | tutorial | Returns the element for a tour step (`task`, `record`, `transcript`, `send`, `output`, `timer`, `finish` in the voice mode). |
+| `getRegion(name)` | tutorial | Returns the element for a tour step (`task`, `record`, `transcript`, `send`, `output`, `timer`, `finish` in the voice mode; the intents mode adds `intents` and `intentCard`). |
 | `onFinishRequest` | task | Set by the task screen; call it when the participant selects Finish Task. |
 | `isBusy()` | task | True while a recording, transcription or AI response is running. |
 | `setLocked(bool)` | task | Turns input off (for example at the time limit). |
@@ -295,7 +313,7 @@ export function tutorialSteps({ recordingMode }) { … }    // the tutorial tour
 Options:
 - `live: false` renders the same layout without input. The briefing backdrop and the tutorial use it.
 - `conceal` hides the task text.
-- `sample` provides `{ turns, draft }` for the tutorial.
+- `sample` provides `{ turns, draft, intents }` for the tutorial (`tutorial.sample` in the strings file; a mode uses what it needs).
 - `onTurn(turn)` is called after each finished AI response.
 
 **Build the canvas on `core/conversation.js`.** It holds everything about talking to the assistant that doesn't depend on the input:
@@ -305,13 +323,19 @@ Options:
 - logging (`ai.sent`, `ai.received`, `ai.failed`)
 - busy and idle: `isBusy()` and `whenIdle()` can be passed straight through to the canvas API
 
-A mode then only adds its input and its layout. It marks its own work with `conv.setBusy(key, on)`, so the task end waits for it; the voice mode does this for transcription. See `public/js/modes/voice/canvas.js` for how the two fit together.
+A mode then only adds its input and its layout. It marks its own work with `conv.setBusy(key, on)`, so the task end waits for it; the voice mode does this for transcription. `conv.send(text, logPayload, body)` can pass extra fields to `/api/chat` (the intents mode sends `{ intentIds }`).
 
-Voice input uses `ctx.api.transcribe` and `createRecorder` from `core/recorder/`. Use `logEvent` for the mode's own events. That way the server routes, logging and mock mode work unchanged.
+**Shared canvas parts** in `public/js/core/canvas/`, used by both modes:
+- `taskPanel.js`: the task panel with Show Situation.
+- `latestResponse.js`: the latest response with "Version n" and "Updated … ago".
+- `controls.js`: the bar with record button, level meter, send, finish and the timer slot.
+- `voiceInput.js`: one record button from recording to transcript (`onText`), with logging and busy marking. A mode can have several (the intents mode has one per card, with `keyboard: 'focus'` so Space only works on the focused button).
+
+See `public/js/modes/voice/canvas.js` (the smallest) and `public/js/modes/intents/canvas.js` for how they fit together. Use `logEvent` for the mode's own events. That way the server routes, logging and mock mode work unchanged.
 
 **`tutorialSteps()`** returns `[{ region, titleKey, textKey }]`. Each region is the name passed to `getRegion`. The keys point to text in the strings file.
 
-Set `interaction.mode: '<name>'` in `config.js`. The server checks that the folder exists.
+Set `interaction.mode: '<name>'` in `config.js`. The server checks that the folder exists, and the dev panel lists every folder.
 
 Recording itself sits behind the `Recorder` interface (`public/js/core/recorder/`) with `pushToTalk` and `toggle` implementations. A new way of recording is a new subclass, registered in `recorder/index.js`.
 
@@ -327,9 +351,10 @@ The **Dev Mode** panel at the top right (it can be collapsed) offers:
   - **Skip ID** starts a dev session (participant `dev.participantId`).
   - **Skip System Check** and **Skip Tutorial** jump past those screens.
   - **New Session** forgets the session in this browser.
+- **Interaction mode:** switches the current session to another mode and shows the current step again in it. The default for new sessions is `interaction.mode` in `config.js`. Logged as `session.modeChanged`.
 - **Mock mode:** switches for Speech-to-text and the LLM.
   - Mock transcription returns the test sentence in the system check and canned instructions elsewhere.
-  - The mock LLM returns canned drafts.
+  - The mock LLM returns canned drafts. For intents it splits the comment at sentences and "and", and appends an annotation to the intent: enough to click through, not a real rewrite.
   - Neither costs anything. Dev sessions start mocked when `dev.mockByDefault` is true.
 - **Jump to step:** go to any step of the flow.
 - **Timer speed:** 1×, 10× or 60×, to test time limits quickly. The choice is remembered in this browser.
@@ -374,20 +399,21 @@ Events (`server.*` and `session.*` come from the server; all others come from th
 
 | Area | Events |
 |---|---|
-| Session | `session.started`, `session.resumed`, `session.completed`, `session.invalidId`, `session.client` (browser, viewport) |
+| Session | `session.started` (with `mode`), `session.resumed`, `session.completed`, `session.invalidId`, `session.client` (browser, viewport), `session.modeChanged` (dev panel) |
 | Steps | `step.entered`, `step.left` (with reason), `step.error` |
 | System check | `systemCheck.check` (each check and its result), `systemCheck.passed`, `recording.*` with `context: 'systemCheck'` |
 | Tutorial | `tutorial.started`, `tutorial.step`, `tutorial.tourCompleted`, `tutorial.practiceStarted`, `tutorial.practiceTurn`, `tutorial.completed` |
-| Task | `task.started`, `situation.opened`, `situation.closed`, `task.finishRequested`, `task.finishCancelled`, `task.finished` (reason, elapsed time, turns) |
+| Task | `task.started` (with `mode`), `situation.opened`, `situation.closed`, `task.finishRequested`, `task.finishCancelled`, `task.finished` (reason, elapsed time, turns) |
 | Timer | `timer.warning`, `timer.limit`, `timer.graceEnd` |
-| Recording | `recording.start`, `recording.stop` (duration, reason, size, format, peak level), `recording.error` |
+| Recording | `recording.start`, `recording.stop` (duration, reason, size, format, peak level), `recording.error`. Intents mode: `target: 'instruction'` (first instruction), `'intents'` (new intents) or `'intent'` with `intentId` (a card's annotation); the same fields are on `transcript.*`. |
 | Transcription | `transcript.received` (length, latency), `transcript.empty`, `transcript.failed`, `draft.cleared` (the discarded text), `server.transcribe` (text, latency, size, format, audio file if stored) |
-| AI | `ai.sent` (length), `ai.received` (latency, first token; `resumed: true` if the response finished during a reload), `ai.failed`, `server.ai.request` (instruction, model, history length), `server.ai.response` (**response text**, latency, token usage) |
+| Intents | `intents.extracted` (count, IDs, latency), `intents.extractFailed`, `intent.toggled` (ID, on/off, number on), `intent.toggleFailed`, `intent.annotated` (ID, latency), `intent.annotateFailed`, `server.intents.extracted` (**transcript and intent texts**), `server.intent.annotated` (**annotation, intent before and after**) |
+| AI | `ai.sent` (length; intents mode: `step: 'first'` or `'intents'` with the intent IDs sent and the number switched off), `ai.received` (latency, first token; `resumed: true` if the response finished during a reload), `ai.failed`, `server.ai.request` (instruction, model, history length; intents mode: the intents sent), `server.ai.response` (**response text**, latency, token usage) |
 | Questionnaire | `survey.submitted` (answers), `survey.externalOpened`, `survey.externalDone` |
 | End | `study.completed` |
 | Problems | `client.error` (uncaught errors, failed saves), `client.saveRecovered`, `client.smallScreen`, `server.error` (route, error code, detail) |
 
-Texts (transcripts, instructions, responses) are logged once, in the `server.*` events; the browser events carry lengths and timings. The complete conversation of each round is also stored with the session in `sessions/<sessionId>.json` (`rounds[round].turns`). It includes the instruction, response, times, latency and token usage.
+Texts (transcripts, instructions, responses) are logged once, in the `server.*` events; the browser events carry lengths and timings. The complete conversation of each round is also stored with the session in `sessions/<sessionId>.json` (`rounds[round].turns`). It includes the instruction, response, times, latency and token usage. In the intents mode, `rounds[round].intents` holds every intent with its source transcript, annotations (before/after), on/off state and the versions it was sent in.
 
 ---
 
@@ -433,7 +459,7 @@ design-system/            Fiori Horizon export (don't edit; tokens.css is genera
 server/
   index.js                Express app, security headers, static files
   config/                 load + validate config, client-safe subset
-  routes/                 session, transcribe/health, chat (streaming), log, dev
+  routes/                 session, transcribe/health, chat (streaming), intents, log, dev
   services/               OpenAI calls, mocks, session store, task assignment
   middleware/             session check, rate limiting
   logger/                 logger interface + JSONL implementation
@@ -441,8 +467,10 @@ public/
   index.html, css/app.css shell and prototype styles (only reads --sap… variables)
   js/main.js              bootstrap
   js/core/                flow controller, session, API client, conversation, logEvent, timer, recorder, dialogs, coach marks
+  js/core/canvas/         canvas parts shared by the modes: task panel, latest response, controls, voice input
   js/screens/             one module per screen: { mount(container, ctx), unmount() }
   js/modes/voice/         voice interaction mode: canvas + tutorial steps
+  js/modes/intents/       intents interaction mode: canvas + tutorial steps
 dev-client/devPanel.js    dev panel (served only in dev mode)
 scripts/build-tokens.mjs  generates design-system/tokens.css
 ```

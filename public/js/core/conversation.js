@@ -7,7 +7,8 @@
 //   conv.turns            finished turns [{ n, transcript, response, sentAt, respondedAt, ... }]
 //   conv.inflight         the turn being answered right now, or null
 //   conv.error            'chat' | 'timeout' | 'rateLimited' | 'pendingLost' | null
-//   await conv.send(text, logPayload)   → the stored turn, or null if it failed
+//   await conv.send(text, logPayload, body)   → the stored turn, or null if it failed
+//                         body: extra request fields for /api/chat (intents mode: { intentIds })
 //   conv.setBusy(key, on) mode-specific work that must finish before the task ends (e.g. 'transcribe')
 //   conv.isBusy(), conv.whenIdle(), conv.clearError(), conv.destroy()
 //
@@ -50,7 +51,7 @@ export function createConversation(ctx, { round, live = true, sample = null, onU
     r.turns = [...r.turns.filter((x) => x.n !== turn.n), turn];
   }
 
-  async function send(text, logPayload = {}) {
+  async function send(text, logPayload = {}, body = {}) {
     if (!text || inflight || destroyed) return null;
     error = null;
     inflight = { n: turns.length + 1, transcript: text, response: '', status: 'pending', sentAt: new Date().toISOString() };
@@ -64,6 +65,7 @@ export function createConversation(ctx, { round, live = true, sample = null, onU
       const turn = await sendChat({
         round,
         text,
+        body,
         onDelta(d) {
           if (firstTokenMs === null) firstTokenMs = Math.round(performance.now() - started);
           inflight.response += d;

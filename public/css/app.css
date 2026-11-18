@@ -186,6 +186,35 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .vc-draft__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sapContent_Space_Tiny); }
 .vc-draft__empty { margin: 0; color: var(--sapContent_LabelColor); line-height: 1.5; }
 
+/* Intents mode: draft left (scrolls), intent panel right (scrolls on its own). */
+.ic .vc-convo { flex: 1; }
+.ic-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 21rem; gap: var(--sapContent_Space_Medium); }
+.ic-side { min-height: 0; display: flex; flex-direction: column; padding-top: var(--sapContent_Space_Tiny); }
+.ic-panel { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
+.ic-panel__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sapContent_Space_Tiny); }
+.ic-panel__count { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
+.ic-panel__body { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); padding: 0.125rem 0.125rem var(--sapContent_Space_Small); }
+.ic-pending { padding: var(--sapContent_Space_Tiny) var(--sapContent_Space_Small); border: var(--sapElement_BorderWidth) dashed var(--sapGroup_ContentBorderColor); border-radius: var(--sapElement_BorderCornerRadius); }
+.ic-error { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
+.ic-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
+.ic-card {
+  display: flex; flex-direction: column; gap: 0.375rem; padding: var(--sapContent_Space_Tiny) var(--sapContent_Space_Small);
+  background: var(--sapTile_Background); border: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor);
+  border-radius: var(--sapElement_BorderCornerRadius); transition: opacity 150ms;
+}
+.ic-card.is-recording { border-color: var(--sapHighlightColor); box-shadow: 0 0 0 1px var(--sapHighlightColor); }
+.ic-card.is-off { background: var(--sapGroup_ContentBackground); }
+.ic-card.is-off .ic-card__text { color: var(--sapContent_LabelColor); text-decoration: line-through; }
+.ic-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sapContent_Space_Tiny); min-height: 1.5rem; }
+.ic-card__tags { display: flex; gap: 0.25rem; }
+.ic-card__switch { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
+.ic-card__text { margin: 0; line-height: 1.45; overflow-wrap: anywhere; color: var(--sapTextColor); }
+.ic-card__foot { display: flex; align-items: center; gap: var(--sapContent_Space_Tiny); min-height: var(--sapElement_LineHeight); }
+.ic-card__annotate { margin-inline-start: -0.5rem; touch-action: none; user-select: none; -webkit-user-select: none; }
+.ic-card__annotate.is-recording, .ic-card__annotate[aria-pressed="true"] { color: var(--sapHighlightColor); }
+.ic-card__status { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
+.ic-card__status .fh-msg-agent__thinking { font-size: var(--sapFontSmallSize); }
+
 .vc-controls { padding: var(--sapContent_Space_Small) 0; border-top: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); }
 .vc-controls__row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sapContent_Space_Medium); }
 .vc-controls__side { display: flex; align-items: center; }

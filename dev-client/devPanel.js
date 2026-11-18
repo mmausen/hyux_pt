@@ -36,6 +36,20 @@ export function initDevPanel(ctx) {
   mockStt.addEventListener('change', setMock);
   mockLlm.addEventListener('change', setMock);
 
+  // ----- interaction mode -----
+  // Default for new sessions: interaction.mode in config.js. This switches the current session and
+  // shows the current step again in the new mode.
+  const modeSelect = h('select', { 'aria-label': 'Interaction mode' }, config.dev.modes.map((m) => h('option', { value: m }, m)));
+  modeSelect.addEventListener('change', async () => {
+    try {
+      await ensureSession();
+      const res = await api.dev.setMode(modeSelect.value);
+      session.data.mode = res.mode;
+      render();
+      if (flow.index >= 0) await flow.goTo(flow.index, { reason: 'dev.mode' });
+    } catch (e) { alert(`Could not set the mode: ${e.code ?? e.message}`); render(); }
+  });
+
   // ----- navigation -----
   const jumpSelect = h('select', { 'aria-label': 'Jump to step' }, flow.steps.map((s) => h('option', { value: String(s.index) }, stepLabel(s))));
   const jump = async (index) => { await ensureSession(); flow.goTo(index, { reason: 'dev' }); };
@@ -89,6 +103,8 @@ export function initDevPanel(ctx) {
     h('section.dev-panel__section', h('div.dev-panel__label', 'Session'), sessionInfo,
       h('div.dev-panel__row', btn('Skip ID', skipId), btn('Skip System Check', skipTo('systemCheck')), btn('Skip Tutorial', skipTo('tutorial'))),
       h('div.dev-panel__row', btn('New Session', newSession, '.fh-btn--transparent'))),
+    h('section.dev-panel__section', h('div.dev-panel__label', 'Interaction Mode'),
+      h('div.dev-panel__row', h('span.fh-input.fh-input--select', modeSelect))),
     h('section.dev-panel__section', h('div.dev-panel__label', 'Mock Mode'),
       h('div.dev-panel__row', sw(mockStt, 'Speech-to-text'), sw(mockLlm, 'LLM'))),
     h('section.dev-panel__section', h('div.dev-panel__label', 'Jump To Step'),
@@ -114,10 +130,11 @@ export function initDevPanel(ctx) {
   function render() {
     const d = session.data;
     clear(sessionInfo).append(d
-      ? `${d.participantId}${d.isDev ? ' (dev)' : ''} · ${d.id.slice(0, 8)} · tasks: ${d.tasks.map((x) => x.id).join(', ')}`
+      ? `${d.participantId}${d.isDev ? ' (dev)' : ''} · ${d.id.slice(0, 8)} · ${d.mode} · tasks: ${d.tasks.map((x) => x.id).join(', ')}`
       : 'No session yet');
     mockStt.checked = Boolean(d?.dev?.mock?.stt);
     mockLlm.checked = Boolean(d?.dev?.mock?.llm);
+    modeSelect.value = d?.mode ?? config.interaction.mode;
     if (flow.index >= 0) jumpSelect.value = String(flow.index);
     statePre.textContent = JSON.stringify({ step: flow.step && stepLabel(flow.step), state: d?.state ?? null, rounds: d?.rounds ?? null }, null, 2);
   }

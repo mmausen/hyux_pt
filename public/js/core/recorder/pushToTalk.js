@@ -22,16 +22,20 @@ export class PushToTalkRecorder extends Recorder {
       this.start();
     };
     const up = () => this.stop('release');
+    const focusOnly = this.keyboard === 'focus';
+    const isKey = (e) => e.code === 'Space' || (focusOnly && (e.code === 'Enter' || e.code === 'NumpadEnter'));
     const keydown = (e) => {
-      if (e.code !== 'Space' || e.repeat || !this.button || !spaceIsFree(e.target, button)) return;
+      if (!isKey(e) || e.repeat || !this.button) return;
+      if (focusOnly ? e.target !== button : !spaceIsFree(e.target, button)) return;
       if (button.disabled || !this.enabled) return;
       e.preventDefault();
       this.start();
     };
     const keyup = (e) => {
-      if (e.code !== 'Space') return;
+      if (!isKey(e)) return;
       if (this.recording || this._starting) { e.preventDefault(); this.stop('release'); }
     };
+    const keys = focusOnly ? button : window;
     // Space on the focused button would also fire a click; swallow it.
     const click = (e) => e.preventDefault();
     const blur = () => this.stop('release'); // window lost focus while holding
@@ -40,16 +44,16 @@ export class PushToTalkRecorder extends Recorder {
     button.addEventListener('pointerup', up);
     button.addEventListener('pointercancel', up);
     button.addEventListener('click', click);
-    window.addEventListener('keydown', keydown);
-    window.addEventListener('keyup', keyup);
+    keys.addEventListener('keydown', keydown);
+    keys.addEventListener('keyup', keyup);
     window.addEventListener('blur', blur);
     this._unbind = () => {
       button.removeEventListener('pointerdown', down);
       button.removeEventListener('pointerup', up);
       button.removeEventListener('pointercancel', up);
       button.removeEventListener('click', click);
-      window.removeEventListener('keydown', keydown);
-      window.removeEventListener('keyup', keyup);
+      keys.removeEventListener('keydown', keydown);
+      keys.removeEventListener('keyup', keyup);
       window.removeEventListener('blur', blur);
     };
   }

@@ -2,8 +2,10 @@
 // recording (pushToTalk.js: hold, toggle.js: click). Usage:
 //
 //   const rec = createRecorder(config.interaction.recordingMode, {
-//     maxSeconds, onStart(), onStop({ blob, durationMs, mimeType, ext, reason, peak }), onLevel(level), onError(err)
+//     maxSeconds, keyboard, onStart(), onStop({ blob, durationMs, mimeType, ext, reason, peak }), onLevel(level), onError(err)
 //   });
+//   keyboard (push-to-talk): 'global' = Space anywhere on the page (the main record button);
+//   'focus' = Space or Enter only while the button has focus (e.g. one of several record buttons).
 //   rec.attach(buttonEl);   // binds input handling
 //   rec.setEnabled(false);  // e.g. while the AI is working or after the time limit
 //   rec.stop('timeLimit');  // force stop; onStop still fires so the audio is not lost
@@ -15,8 +17,8 @@ import { pickFormat, extensionFor } from './mediaFormat.js';
 export const MIN_RECORDING_MS = 400;
 
 export class Recorder {
-  constructor({ maxSeconds = 60, onStart, onStop, onLevel, onError, onTick } = {}) {
-    Object.assign(this, { maxSeconds, onStart, onStop, onLevel, onError, onTick });
+  constructor({ maxSeconds = 60, keyboard = 'global', onStart, onStop, onLevel, onError, onTick } = {}) {
+    Object.assign(this, { maxSeconds, keyboard, onStart, onStop, onLevel, onError, onTick });
     this.recording = false;
     this.enabled = true;
     this.button = null;

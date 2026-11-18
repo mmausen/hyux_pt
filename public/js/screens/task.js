@@ -1,5 +1,5 @@
 // Task: the live canvas of the configured interaction mode, plus the timer and the end-of-task handling.
-// This screen is mode-independent; the canvas comes from ctx.mode.createCanvas().
+// This screen is mode-independent; the canvas comes from the session's mode (ctx.getMode()).createCanvas().
 import { h, clear, messageStrip } from '../core/dom.js';
 import { t } from '../core/strings.js';
 import { openDialog } from '../core/dialog.js';
@@ -17,7 +17,7 @@ export default function create() {
   let devCtx = null;
 
   return {
-    mount(container, ctx) {
+    async mount(container, ctx) {
       const { round } = ctx.step;
       const task = ctx.session.task(round);
       const cfg = ctx.config.timer;
@@ -26,14 +26,16 @@ export default function create() {
       let finished = false;
 
       if (progress.finishedAt) return ctx.flow.next();
+      const mode = await ctx.getMode();
+      if (gone) return;
       if (!progress.taskStartedAt) {
         // No briefing in the flow (or skipped in dev mode): the task starts now.
         ctx.session.updateProgress(round, { taskId: task.id, taskStartedAt: Date.now() }, { immediate: true });
         progress = ctx.session.progress(round);
-        logEvent('task.started', { title: task.title, timeLimitMinutes: task.timeLimitMinutes, timerMode: cfg.mode, via: 'task' });
+        logEvent('task.started', { title: task.title, timeLimitMinutes: task.timeLimitMinutes, timerMode: cfg.mode, mode: mode.name, via: 'task' });
       }
 
-      canvas = ctx.mode.createCanvas(ctx, { round, task, live: true });
+      canvas = mode.createCanvas(ctx, { round, task, live: true });
       container.append(h('div.app-canvas-host', canvas.el));
 
       const notice = (design, key, vars) => clear(canvas.noticeSlot).append(messageStrip(design, t(key, vars)));

@@ -142,6 +142,9 @@ export default {
       tooShort: 'The recording was too short. Hold the button while you speak.',
       empty: 'No speech was recognized in the last recording. Try again.',
       chat: 'The assistant could not respond. Your instruction is kept. Try again.',
+      intentsExtract: 'Your recording could not be turned into intents. Try again.',
+      intentAnnotate: 'The intent could not be changed. Try again.',
+      intentToggle: 'The intent could not be switched. Try again.',
       timeout: 'The request took too long. Your instruction is kept. Try again.',
       rateLimited: 'Too many requests in a short time. Wait a moment and try again.',
       mic: 'The microphone could not be started. Check that the browser may use it, then try again.',
@@ -165,6 +168,26 @@ export default {
     label: 'Time used',
   },
 
+  // Intents mode (public/js/modes/intents): the intent cards next to the draft.
+  intents: {
+    panelLabel: 'Intents',
+    count: '{active} of {total} on',
+    emptyPushToTalk: 'Hold the record button or the Space key and say what to change. What you say becomes intents here.',
+    emptyToggle: 'Select the record button and say what to change. What you say becomes intents here.',
+    finding: 'Finding intents in your recording',
+    noneFound: 'No change request was found in your last recording. Try again in other words.',
+    updating: 'Updating the intent',
+    on: 'On',
+    off: 'Off',
+    useLabel: 'Use intent: {text}',
+    annotateHold: 'Hold to Change',
+    annotateStart: 'Change by Voice',
+    annotateStop: 'Stop Recording',
+    tagNew: 'New',
+    tagChanged: 'Changed',
+    tagSent: 'In Version {n}',
+    send: 'Send Intents',
+  },
   tutorial: {
     progress: '{step} of {total}',
     next: 'Next',
@@ -181,7 +204,19 @@ export default {
       timer: { title: 'Keep an Eye on the Time', text: 'This bar fills up as time passes. Time keeps running while the assistant writes.' },
       finish: { title: 'Finish the Task', text: 'Select Finish Task when you are happy with the result. You can finish at any time, also before the time limit.' },
     },
-    // Example content shown on the canvas during the tour.
+    intents: {
+      task: { title: 'Your Task', text: 'Your task is always shown at the top. Before each task you read its situation; during the task, select Show Situation to read it again.' },
+      recordPushToTalk: { title: 'Speak Your Thoughts', text: 'Hold this button, or the Space key, while you speak. Your first instruction is sent as you said it and gives a first draft. After that, everything you say becomes intents: short change requests for the draft.' },
+      recordToggle: { title: 'Speak Your Thoughts', text: 'Select this button to start recording and select it again when you are done. Your first instruction is sent as you said it and gives a first draft. After that, everything you say becomes intents: short change requests for the draft.' },
+      output: { title: 'Read the Draft', text: 'The assistant’s latest draft appears here. Each new version replaces the previous one, and the time next to it shows when it was last updated.' },
+      intents: { title: 'Your Intents', text: 'Each thing you ask for appears here as a card, newest first. One recording can give several intents. “New” marks intents that have not been sent yet.' },
+      cardPushToTalk: { title: 'Switch or Change an Intent', text: 'Switch an intent off to leave it out of the next version. To change an intent, hold its microphone button and say what to change; it is updated when you release the button.' },
+      cardToggle: { title: 'Switch or Change an Intent', text: 'Switch an intent off to leave it out of the next version. To change an intent, select its microphone button, say what to change and select it again; it is updated then.' },
+      send: { title: 'Send the Intents', text: 'Sends the intents that are switched on, together with the latest draft, to the assistant. It writes a new version from them; earlier versions are not sent.' },
+      timer: { title: 'Keep an Eye on the Time', text: 'This bar fills up as time passes. Time keeps running while the assistant writes.' },
+      finish: { title: 'Finish the Task', text: 'Select Finish Task when you are happy with the result. You can finish at any time, also before the time limit.' },
+    },
+    // Example content shown on the canvas during the tour. intents: used by the intents mode only.
     sample: {
       task: {
         title: 'Example Task',
@@ -196,6 +231,11 @@ export default {
         },
       ],
       draft: 'Make it a bit more personal and mention the new delivery options.',
+      intents: [
+        { text: 'Use a less formal greeting', active: false },
+        { text: 'Make it a bit more personal' },
+        { text: 'Mention the new delivery options' },
+      ],
     },
     practice: {
       task: {

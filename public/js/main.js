@@ -82,10 +82,17 @@ async function main() {
   setupStatus(session);
   const steps = buildSteps(config);
 
-  // The interaction mode (public/js/modes/<name>/) provides the canvas and the tutorial steps.
-  let mode;
+  // The interaction mode (public/js/modes/<name>/) provides the canvas and the tutorial steps. It belongs
+  // to the session (set by the server from interaction.mode when the session starts; the dev panel can
+  // change it), so screens ask for it when they mount: await ctx.getMode().
+  const modules = new Map();
+  const getMode = () => {
+    const name = session.data?.mode ?? config.interaction.mode;
+    if (!modules.has(name)) modules.set(name, import(`/js/modes/${name}/index.js`).catch((e) => { modules.delete(name); throw e; }));
+    return modules.get(name);
+  };
   try {
-    mode = await import(`/js/modes/${config.interaction.mode}/index.js`);
+    await getMode(); // the default, so a broken mode shows up at once
   } catch (e) {
     console.error(e);
     return showFatal(t('app.loadFailed'));
@@ -93,7 +100,7 @@ async function main() {
 
   const ctx = {
     config,
-    mode,
+    getMode,
     t,
     api,
     session,

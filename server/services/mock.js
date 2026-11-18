@@ -38,6 +38,19 @@ export function createMockService({ config }) {
       }
       return { text, usage: null };
     },
+    // Intents without an LLM: one intent per sentence or "and"-clause of the comment; an annotation is
+    // appended to the intent. Good enough to click through the intents mode.
+    async structured({ kind, input, signal }) {
+      await sleep(latency(), signal);
+      const text = String(input.at(-1)?.content ?? '');
+      const said = (label) => (text.split(`${label}:\n`)[1] ?? '').split('\n\n')[0].trim();
+      const short = (s) => s.split(/\s+/).slice(0, 12).join(' ').replace(/[.,;:]+$/, '');
+      const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+      if (kind === 'annotateIntent') return { data: { text: cap(short(`${said('Intent')}, ${said('Annotation')}`)) }, usage: null };
+      const parts = said('Comment').split(/(?<=[.!?])\s+|,?\s+and\s+(?:also\s+)?/i).map((s) => s.trim()).filter((s) => s.split(/\s+/).length >= 2);
+      return { data: { intents: parts.slice(0, 3).map((p) => ({ text: cap(short(p)) })) }, usage: null };
+    },
+
     async health({ signal }) {
       await sleep(latency(), signal);
       return { ok: true, model: 'mock' };

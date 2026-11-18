@@ -10,6 +10,7 @@ export function sessionView(session, app) {
     id: session.id,
     participantId: session.participantId,
     isDev: session.isDev,
+    mode: session.mode ?? app.config.interaction.mode,
     completed: Boolean(session.completedAt),
     tasks: session.plan.map((id) => app.tasksById.get(id)).filter(Boolean),
     state: session.state,
@@ -46,9 +47,10 @@ export function sessionRoutes(app) {
     const session = await store.create({
       participantId: pid,
       plan: assignTasks(pid, config),
+      mode: config.interaction.mode,
       dev: app.env.devMode ? { mock: { stt: false, llm: false } } : null,
     });
-    logger.write({ participantId: pid, sessionId: session.id, type: 'session.started', payload: { plan: session.plan, userAgent: req.get('user-agent') } });
+    logger.write({ participantId: pid, sessionId: session.id, type: 'session.started', payload: { plan: session.plan, mode: session.mode, userAgent: req.get('user-agent') } });
     res.status(201).json(sessionView(session, app));
   });
 
