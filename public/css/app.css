@@ -422,6 +422,79 @@ mark.ts-mark { color: inherit; background: var(--ts-bg); border-bottom: 0.125rem
 .cp-accept { gap: var(--sapContent_Space_Tiny); }
 @media (max-width: 52rem) { .cp-pair { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .cp-card { transition: none; } .cp-card.is-new { animation: none; } }
+/* Highlight mode: the draft as a page in the middle; a selection gets a frame and a small toolbar. */
+.hl .vc-convo { flex: 1; }
+.hl-scroll { padding-top: var(--sapContent_Space_Small); }
+.hl-doc {
+  max-width: 50rem; margin: 0 auto; display: flex; flex-direction: column; gap: var(--sapContent_Space_Small);
+  padding: var(--sapContent_Space_Medium) 2rem 2rem;
+  background: var(--sapTile_Background); border-radius: var(--sapTile_BorderCornerRadius); box-shadow: var(--sapContent_Shadow0);
+}
+.hl-meta .fh-agent-avatar { margin-inline-end: 0.125rem; }
+.hl-page { position: relative; padding-bottom: 7rem; } /* room for the toolbar under the last lines */
+.hl-body {
+  position: relative; z-index: 1; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text;
+  font-size: var(--sapFontLargeSize); line-height: 1.6; color: var(--sapTextColor);
+}
+.hl-body::selection, .hl-body *::selection { background: color-mix(in srgb, var(--sapHighlightColor) 22%, transparent); }
+.hl-doc.is-locked .hl-body { user-select: none; -webkit-user-select: none; cursor: default; }
+.hl-frame { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 0; }
+.hl-frame path {
+  fill: color-mix(in srgb, var(--sapHighlightColor) 9%, transparent); stroke: var(--sapHighlightColor); stroke-width: 2;
+  stroke-linejoin: round;
+}
+.hl-frame.is-working path { stroke-dasharray: 6 5; animation: hl-march 0.6s linear infinite; }
+@keyframes hl-march { to { stroke-dashoffset: -11; } }
+.hl-changed { border-radius: 0.25rem; animation: hl-flash 4s ease-out forwards; }
+@keyframes hl-flash {
+  0%, 35% { background: color-mix(in srgb, var(--sapPositiveElementColor, #36a41d) 28%, transparent); }
+  100% { background: transparent; }
+}
+.hl-status:empty { display: none; }
+.hl-hint { margin: 0; display: flex; align-items: center; gap: 0.375rem; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
+.hl-hint .fh-icon { width: 0.875rem; height: 0.875rem; }
+
+.hl-pop {
+  position: absolute; z-index: 2; width: 19rem; max-width: 100%; display: flex; flex-direction: column; gap: 0.375rem;
+  padding: 0.5rem; background: var(--sapGroup_ContentBackground, var(--sapTile_Background));
+  border: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); border-radius: var(--sapElement_BorderCornerRadius);
+  box-shadow: var(--sapContent_Shadow2, var(--sapContent_Shadow1));
+}
+.hl-pop[hidden] { display: none; }
+.hl-pop.is-recording { border-color: var(--sapHighlightColor); box-shadow: 0 0 0 1px var(--sapHighlightColor), var(--sapContent_Shadow1); }
+.hl-pop__noteRow { display: flex; align-items: flex-start; gap: 0.25rem; }
+.hl-pop__note { flex: 1; margin: 0; padding: 0.25rem 0.375rem; line-height: 1.45; overflow-wrap: anywhere; max-height: 8rem; overflow-y: auto; }
+.hl-pop__note.is-empty { color: var(--sapContent_LabelColor); font-size: var(--sapFontSmallSize); }
+.hl-pop__note:not(.is-empty) { font-style: italic; border-inline-start: 2px solid var(--sapHighlightColor); }
+.hl-pop__status { display: flex; flex-direction: column; gap: 0.375rem; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; padding-inline: 0.375rem; }
+.hl-pop__status[hidden] { display: none; }
+.hl-pop__status > .fh-btn { align-self: flex-start; }
+.hl-pop__actions { display: flex; justify-content: flex-end; gap: 0.25rem; }
+.hl-pop__mic { touch-action: none; user-select: none; -webkit-user-select: none; }
+.hl-pop__mic.is-recording, .hl-pop__mic[aria-pressed="true"] { color: var(--sapHighlightColor); }
+.hl-pop.is-recording .hl-pop__mic { background: color-mix(in srgb, var(--sapHighlightColor) 14%, transparent); }
+
+.hl-controls { position: relative; }
+.hl-challenge { min-width: 12rem; }
+.hl-ask {
+  position: absolute; z-index: 20; bottom: calc(100% + var(--sapContent_Space_Small)); left: 50%; transform: translateX(-50%);
+  width: 28rem; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; gap: 0.375rem;
+  padding: var(--sapContent_Space_Small) var(--sapContent_Space_Small) var(--sapContent_Space_Small) var(--sapContent_Space_Medium);
+  background: var(--sapTile_Background); border: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor);
+  border-inline-start: 4px solid var(--sapCriticalElementColor, var(--sapCriticalTextColor));
+  border-radius: var(--sapElement_BorderCornerRadius); box-shadow: var(--sapContent_Shadow2, var(--sapContent_Shadow1));
+  animation: hl-ask-in 180ms ease-out;
+}
+.hl-ask[hidden] { display: none; }
+@keyframes hl-ask-in { from { opacity: 0; transform: translate(-50%, 0.5rem); } }
+.hl-ask__head { display: flex; align-items: center; gap: 0.5rem; }
+.hl-ask__icon { color: var(--sapCriticalElementColor, var(--sapCriticalTextColor)); }
+.hl-ask__title { flex: 1; font-family: var(--font-bold); font-weight: 700; color: var(--sapTitleColor); }
+.hl-ask__body { display: flex; flex-direction: column; gap: 0.375rem; }
+.hl-ask__body > div > .fh-btn { margin-top: 0.25rem; }
+.hl-ask__text { margin: 0; font-size: var(--sapFontLargeSize); line-height: 1.5; color: var(--sapTextColor); }
+.hl-ask__note { margin: 0; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
+@media (prefers-reduced-motion: reduce) { .hl-frame.is-working path, .hl-ask { animation: none; } .hl-changed { animation-duration: 0.01s; } }
 
 .vc-controls { padding: var(--sapContent_Space_Small) 0 var(--sapContent_Space_Medium); border-top: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); }
 .vc-controls__row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sapContent_Space_Medium); }

@@ -100,6 +100,9 @@ export function validateConfig(config, { tasks, modes, hasApiKey, devMode }) {
   str('ai.compare.initialPrompt'); str('ai.compare.nextPrompt');
   bool('ai.compare.includeSituation');
   num('ai.compare.maxOutputTokens', { min: 256, max: 32000, int: true });
+  str('ai.highlight.editPrompt'); str('ai.highlight.challengePrompt');
+  num('ai.highlight.maxOutputTokens', { min: 64, max: 32000, int: true });
+  num('ai.highlight.hedgeAfterSeconds', { min: 0, max: 600 });
 
   // stt
   str('stt.model');

@@ -19,7 +19,14 @@ const RESPONSES = [
   'Hi Laura, I enjoyed your recent post on warehouse automation. Since our demo, we have cut typical implementation time to six weeks. A logistics company close to yours went live this quarter. I would like to show you how they budgeted for it. Do you have 20 minutes next Tuesday or Wednesday?',
 ];
 
+const CHALLENGES = [
+  'Would the CFO read this passage as a benefit for the hospital, or as a benefit for you?',
+  'What if the opposite were true: what would you write if a smaller renewal served the customer better?',
+  'Which number would make this point harder to argue with, and do you actually have it?',
+];
+
 export function createMockService({ config }) {
+  let c = 0;
   let t = 0;
   let r = 0;
   const latency = () => config.dev.mockLatencyMs;
@@ -58,6 +65,17 @@ export function createMockService({ config }) {
         const paras = String(context.chosen ?? '').split('\n\n');
         paras.splice(Math.max(1, paras.length - 1), 0, `(Round ${context.step}: more of what you liked: ${said}.)`);
         return { data: { profile: [...(context.profile ?? []), `Likes: ${said}`].slice(-12), challenger: paras.join('\n\n'), differences: ['Adds one paragraph'] }, usage: null };
+      }
+      // Highlight mode: a placeholder in square brackets is replaced by the annotation; other text gets the
+      // annotation added in brackets, so the change is easy to spot.
+      if (kind === 'highlightEdit') {
+        const { selected = '', annotation = '' } = context;
+        const said = annotation.replace(/[.!?]+$/, '');
+        const replace = /^\[.*\]$/s.test(selected.trim()) ? `${said.charAt(0).toUpperCase()}${said.slice(1)}.` : `${selected} (${said})`;
+        return { data: { edits: [{ find: selected, replace }] }, usage: null };
+      }
+      if (kind === 'challenge') {
+        return { data: { question: CHALLENGES[c++ % CHALLENGES.length] }, usage: null };
       }
       const text = String(input.at(-1)?.content ?? '');
       const said = (label) => (text.split(`${label}:\n`)[1] ?? '').split('\n\n')[0].trim();

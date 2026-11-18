@@ -144,6 +144,13 @@ Only one recording runs at a time, and recordings are collected one after the ot
 
 The profile is never sent to the browser. Everything is stored with the session (`rounds[round].compare`: versions with their differences, the pair, the profile, every pick with the annotation and the profile before and after, the accepted version).
 
+**`highlight`** (branch `highlight`). The participant works directly on the draft; there is no main record or send button and no tutorial yet (the tutorial screen skips itself for a mode without `tutorialSteps`).
+
+1. **Starting draft.** As in the intents mode (`scaffold`, stored as turn 1).
+2. **Highlight.** Selecting text in the draft snaps to whole words and frames the passage: a pill for one line, a rounded outline that follows the text for several lines. A small toolbar under it has three icons: microphone (hold to annotate by voice; each recording is added to the annotation), send to the assistant (needs an annotation) and remove. A new selection replaces the old one (and its annotation); Escape removes it.
+3. **Send** asks the model for targeted edits (`ai.highlight.editPrompt`): the draft with the passage marked and the annotation go in, a list of `{ find, replace }` edits comes back. The server applies them (an edit that does not match is skipped; one that matches more than once is applied nearest to the passage) and stores the new draft as a turn with `kind: 'edit'`. Only the changed words flash in the draft.
+4. **Challenge Me** (in place of the send button) sends the draft, the highlighted passage and the annotation (`ai.highlight.challengePrompt`) and shows one short question in a popup above the button. It is not answered and changes nothing; the participant closes it when they want.
+
 ---
 
 ## Configuration reference
