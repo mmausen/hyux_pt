@@ -70,8 +70,9 @@ export default {
     systemPrompt:
       'You are a writing assistant for sales professionals. You receive spoken instructions that were ' +
       'transcribed automatically, so they may contain recognition errors; interpret them sensibly. ' +
-      'Do what the instruction asks and answer with the result directly, without preamble. ' +
-      'If an instruction is unclear, make a reasonable assumption and state it in one short sentence. ' +
+      'Do what the instruction asks. Answer with the requested text only: no introduction (such as ' +
+      '"Here is the revised version:"), no label or heading about the text, and no comment, note or ' +
+      'offer after it. If an instruction is unclear, make a reasonable assumption without mentioning it. ' +
       'Write plain text without Markdown formatting; use line breaks for structure.',
     temperature: null, // null = not sent. gpt-6.2-sol and gpt-6.2-astra do not accept temperature.
     reasoningEffort: 'low', // null = not sent; otherwise 'low' | 'medium' | 'high' | 'xhigh' | 'max'
@@ -83,22 +84,34 @@ export default {
     intents: {
       extractPrompt:
         'You turn a spoken comment about a draft into intents: short, self-contained change requests for ' +
-        'the draft. The comment was transcribed automatically and may contain recognition errors. ' +
-        'Split the comment into one intent per distinct request; most comments contain one or two. ' +
-        'Write each intent as an imperative in at most 12 words, in the language of the comment ' +
-        '(for example "Mention the six-week rollout"). Resolve references such as "that part" using the ' +
-        'draft. Leave out filler and thinking aloud. If the comment contains no request, return no intents.',
+        'the draft, each with the reason the speaker gave for it. The comment was transcribed ' +
+        'automatically and may contain recognition errors. Split the comment into one intent per distinct ' +
+        'request; most comments contain one or two. For each intent return: text, the request as an ' +
+        'imperative in at most 12 words, in the language of the comment (for example "Mention the six-week ' +
+        'rollout"), resolving references such as "that part" using the draft; reason, why the speaker ' +
+        'wants it, in at most 15 words and in their terms (for example "The CFO cares about the cost of ' +
+        'turnover"), taken only from what they said or clearly meant, never a reason of your own, and an ' +
+        'empty string if they gave none; quote, the words of the comment the intent comes from, copied ' +
+        'exactly. Leave out filler. If the comment contains no request, return no intents.',
       annotatePrompt:
-        'You update one intent (a short change request for a draft) according to a spoken annotation. ' +
-        'The annotation was transcribed automatically and may contain recognition errors. Return the ' +
-        'updated intent as an imperative in at most 12 words, in the language of the intent. If the ' +
-        'annotation replaces the intent, return the new one; if it adds a detail, merge it.',
+        'You update one intent (a short change request for a draft, with the reason the author gave for ' +
+        'it) according to a spoken annotation. The annotation was transcribed automatically and may ' +
+        'contain recognition errors. Return text, the updated intent as an imperative in at most 12 words, ' +
+        'in the language of the intent: if the annotation replaces the intent, the new one; if it adds a ' +
+        'detail, merged. Return reason in at most 15 words: the current reason, updated or extended if the ' +
+        'annotation gives a new or further reason; never a reason of your own, and an empty string if ' +
+        'there is none.',
       reviseInstruction:
-        'Revise the current draft below so that it follows every intent in the list. Keep everything ' +
-        'the intents do not ask to change. The draft may contain placeholders in square brackets: fill ' +
-        'one only when the intents give what it needs, otherwise keep it as it is. Answer with the full ' +
-        'revised draft only.',
+        'Revise the current draft below so that it follows every intent in the list. Some intents give ' +
+        'the author\'s reason in brackets: use it to decide how to carry the intent out and what to ' +
+        'emphasise, since it shows what the author has in mind. Keep everything the intents do not ask to ' +
+        'change. The draft may contain placeholders in square brackets: fill one only when the intents ' +
+        'give what it needs, otherwise keep it as it is. Answer with the full revised draft only, starting ' +
+        'with its first line: do not introduce it, describe what you changed or add notes.',
       maxOutputTokens: 600, // for extracting and annotating intents
+      // A second, identical intent request starts if the first has not answered after this many seconds;
+      // the first answer is used. Cuts the rare very slow request (seen: 21 s instead of 2–3 s). 0 = off.
+      hedgeAfterSeconds: 5,
     },
   },
 

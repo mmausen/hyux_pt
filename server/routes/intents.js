@@ -1,6 +1,8 @@
 // /api/intents: intent cards of the 'intents' interaction mode. The server owns them, next to the turns:
-// session.rounds[round].intents = [{ id, text, active, transcript, createdAt, updatedAt, createdAfterTurn,
-// annotations: [{ text, before, after, at }], sentIn: [turn n] }].
+// session.rounds[round].intents = [{ id, text, reason, quote, active, transcript, createdAt, updatedAt,
+// createdAfterTurn, annotations: [{ text, before, after, reasonBefore, reasonAfter, at }], sentIn: [turn n] }].
+// text is the change request, reason why the participant wants it ('' if they gave none) and quote the
+// participant's own words it comes from (part of transcript, the whole recording).
 //
 //   POST /api/intents/start         { round }         the round starts from the task's starting draft
 //   POST /api/intents/extract       { round, text }   spoken comment → new intents (may be none)
@@ -21,17 +23,29 @@ import { rateLimit } from '../middleware/rateLimit.js';
 
 const MAX_CHARS = 4000;
 const MAX_INTENTS = 60;
+const NO_REASON = '(none given)'; // what the annotate call sees for an intent without a reason
+const clean = (v) => String(v ?? '').trim();
 
 const EXTRACT_SCHEMA = {
   type: 'object',
-  properties: { intents: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false } } },
+  properties: {
+    intents: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { text: { type: 'string' }, reason: { type: 'string' }, quote: { type: 'string' } },
+        required: ['text', 'reason', 'quote'],
+        additionalProperties: false,
+      },
+    },
+  },
   required: ['intents'],
   additionalProperties: false,
 };
 const ANNOTATE_SCHEMA = {
   type: 'object',
-  properties: { text: { type: 'string' } },
-  required: ['text'],
+  properties: { text: { type: 'string' }, reason: { type: 'string' } },
+  required: ['text', 'reason'],
   additionalProperties: false,
 };
 
@@ -113,13 +127,17 @@ export function intentRoutes(app) {
       const doneTurns = roundData.turns.filter((t) => t.status === 'done').length;
       let next = roundData.intents.reduce((m, x) => Math.max(m, Number(x.id.slice(1)) || 0), 0);
       const added = (out.data?.intents ?? [])
-        .map((x) => String(x?.text ?? '').trim()).filter(Boolean).slice(0, 8)
-        .map((t) => ({ id: `i${++next}`, text: t, active: true, transcript: text, createdAt: now, updatedAt: now, createdAfterTurn: doneTurns, annotations: [], sentIn: [] }));
+        .map((x) => ({ text: clean(x?.text), reason: clean(x?.reason), quote: clean(x?.quote) }))
+        .filter((x) => x.text).slice(0, 8)
+        .map((x) => ({
+          id: `i${++next}`, text: x.text, reason: x.reason, quote: x.quote || text, active: true, transcript: text,
+          createdAt: now, updatedAt: now, createdAfterTurn: doneTurns, annotations: [], sentIn: [],
+        }));
       roundData.intents.push(...added);
       await store.update(req.study, (s) => { s.rounds[key] = roundData; });
       log.write('server.intents.extracted', {
-        latencyMs: Date.now() - started, transcript: text, intents: added.map(({ id, text: t }) => ({ id, text: t })),
-        usage: out.usage ?? null, mock: service === mock || undefined,
+        latencyMs: Date.now() - started, transcript: text, intents: added.map(({ id, text: t, reason, quote }) => ({ id, text: t, reason, quote })),
+        usage: out.usage ?? null, attempts: out.attempts, attempt: out.attempt, mock: service === mock || undefined,
       });
       res.json({ intents: added, mock: service === mock || undefined });
     } catch (e) {
@@ -140,19 +158,21 @@ export function intentRoutes(app) {
       const out = await service.structured({
         kind: 'annotateIntent',
         instructions: config.ai.intents.annotatePrompt,
-        input: [{ role: 'user', content: `Current draft:\n${latestDraft(roundData)}\n\nIntent:\n${intent.text}\n\nAnnotation:\n${text}` }],
+        input: [{ role: 'user', content: `Current draft:\n${latestDraft(roundData)}\n\nIntent:\n${intent.text}\n\nReason:\n${intent.reason || NO_REASON}\n\nAnnotation:\n${text}` }],
         schema: ANNOTATE_SCHEMA,
         signal: AbortSignal.timeout(config.ai.timeoutSeconds * 1000),
       });
-      const after = String(out.data?.text ?? '').trim() || intent.text;
+      const after = clean(out.data?.text) || intent.text;
       const before = intent.text;
+      const reasonBefore = intent.reason ?? '';
+      const reasonAfter = clean(out.data?.reason).replace(NO_REASON, '');
       const now = new Date().toISOString();
-      Object.assign(intent, { text: after, updatedAt: now });
-      intent.annotations.push({ text, before, after, at: now });
+      Object.assign(intent, { text: after, reason: reasonAfter, updatedAt: now });
+      intent.annotations.push({ text, before, after, reasonBefore, reasonAfter, at: now });
       await store.update(req.study, (s) => { s.rounds[key] = roundData; });
       log.write('server.intent.annotated', {
-        id: intent.id, latencyMs: Date.now() - started, annotation: text, before, after,
-        usage: out.usage ?? null, mock: service === mock || undefined,
+        id: intent.id, latencyMs: Date.now() - started, annotation: text, before, after, reasonBefore, reasonAfter,
+        usage: out.usage ?? null, attempts: out.attempts, attempt: out.attempt, mock: service === mock || undefined,
       });
       res.json({ intent, mock: service === mock || undefined });
     } catch (e) {

@@ -194,26 +194,53 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .ic-panel__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sapContent_Space_Tiny); }
 .ic-panel__count { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
 .ic-panel__body { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); padding: 0.125rem 0.125rem var(--sapContent_Space_Small); }
-.ic-pending { padding: var(--sapContent_Space_Tiny) var(--sapContent_Space_Small); border: var(--sapElement_BorderWidth) dashed var(--sapGroup_ContentBorderColor); border-radius: var(--sapElement_BorderCornerRadius); }
+.ic-pending { display: flex; flex-direction: column; gap: 0.25rem; padding: var(--sapContent_Space_Tiny) var(--sapContent_Space_Small); border: var(--sapElement_BorderWidth) dashed var(--sapGroup_ContentBorderColor); border-radius: var(--sapElement_BorderCornerRadius); }
+.ic-pending__text { font-size: var(--sapFontSmallSize); font-style: italic; color: var(--sapContent_LabelColor); line-height: 1.45; overflow-wrap: anywhere; }
 .ic-error { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
 .ic-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
 .ic-card {
-  display: flex; flex-direction: column; gap: 0.375rem; padding: var(--sapContent_Space_Tiny) var(--sapContent_Space_Small);
+  display: flex; flex-direction: column; gap: 0.25rem; padding: 0.375rem var(--sapContent_Space_Tiny) 0.375rem 0.375rem;
   background: var(--sapTile_Background); border: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor);
   border-radius: var(--sapElement_BorderCornerRadius); transition: opacity 150ms;
 }
 .ic-card.is-recording { border-color: var(--sapHighlightColor); box-shadow: 0 0 0 1px var(--sapHighlightColor); }
 .ic-card.is-off { background: var(--sapGroup_ContentBackground); }
 .ic-card.is-off .ic-card__text { color: var(--sapContent_LabelColor); text-decoration: line-through; }
-.ic-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sapContent_Space_Tiny); min-height: 1.5rem; }
-.ic-card__tags { display: flex; gap: 0.25rem; }
-.ic-card__switch { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
-.ic-card__text { margin: 0; line-height: 1.45; overflow-wrap: anywhere; color: var(--sapTextColor); }
-.ic-card__foot { display: flex; align-items: center; gap: var(--sapContent_Space_Tiny); min-height: var(--sapElement_LineHeight); }
-.ic-card__annotate { margin-inline-start: -0.5rem; touch-action: none; user-select: none; -webkit-user-select: none; }
+.ic-card.is-off .ic-card__reason, .ic-card.is-off .ic-card__quote { opacity: 0.7; }
+/* Checkbox | request, reason, own words | state and microphone. */
+.ic-card__row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 0.25rem; }
+.ic-card__check { min-height: 1.5rem; padding-inline: 0.25rem; }
+.ic-card__body { display: flex; flex-direction: column; gap: 0.125rem; padding-top: 0.1875rem; }
+.ic-card__text { margin: 0; line-height: 1.35; overflow-wrap: anywhere; color: var(--sapTextColor); font-family: var(--font-semibold); font-weight: 600; }
+.ic-card__reason { margin: 0; font-size: var(--sapFontSmallSize); line-height: 1.4; color: var(--sapTextColor); overflow-wrap: anywhere; }
+.ic-card__why { font-family: var(--font-semibold); font-weight: 600; color: var(--sapContent_LabelColor); margin-inline-end: 0.375rem; }
+.ic-card__quote { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
+.ic-card__quote summary { cursor: pointer; width: fit-content; color: var(--sapLinkColor); list-style-position: inside; }
+.ic-card__quote summary:hover { text-decoration: underline; }
+.ic-card__quote p { margin: 0.25rem 0 0; padding-inline-start: var(--sapContent_Space_Tiny); border-inline-start: 2px solid var(--sapGroup_ContentBorderColor); font-style: italic; line-height: 1.45; overflow-wrap: anywhere; }
+.ic-card__side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.125rem; }
+.ic-card__state { display: inline-flex; align-items: center; gap: 0.3125rem; min-height: 1.5rem; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); white-space: nowrap; }
+.ic-card__dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--sapNeutralElementColor, var(--sapContent_LabelColor)); flex: none; }
+.ic-card[data-state="new"] .ic-card__dot { background: var(--sapInformativeElementColor, var(--sapHighlightColor)); }
+.ic-card[data-state="new"] .ic-card__state { color: var(--sapInformativeTextColor); }
+.ic-card[data-state="changed"] .ic-card__dot { background: var(--sapCriticalElementColor, var(--sapCriticalTextColor)); }
+.ic-card[data-state="changed"] .ic-card__state { color: var(--sapCriticalTextColor); }
+.ic-card[data-state="applied"] .ic-card__dot { background: var(--sapPositiveElementColor, var(--sapPositiveTextColor)); }
+/* The microphone shows on hover or focus, while it is in use, in the tour and on touch screens. */
+.ic-card__annotate { touch-action: none; user-select: none; -webkit-user-select: none; opacity: 0; transition: opacity 120ms; }
+.ic-card:hover .ic-card__annotate, .ic-card:focus-within .ic-card__annotate, .ic-card.is-recording .ic-card__annotate,
+.ic-card.is-busy .ic-card__annotate, .vc--static .ic-card__annotate { opacity: 1; }
+@media (hover: none) { .ic-card__annotate { opacity: 1; } }
 .ic-card__annotate.is-recording, .ic-card__annotate[aria-pressed="true"] { color: var(--sapHighlightColor); }
-.ic-card__status { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
+.ic-card__status { padding-inline-start: 2rem; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
 .ic-card__status .fh-msg-agent__thinking { font-size: var(--sapFontSmallSize); }
+/* Intents already in the draft: a collapsed group under the others. */
+.ic-kept { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); margin-top: var(--sapContent_Space_Tiny); }
+.ic-kept__toggle { align-self: flex-start; margin-inline-start: -0.25rem; padding-inline: 0.25rem; color: var(--sapContent_LabelColor); }
+.ic-kept__chevron { transition: transform 120ms; }
+.ic-kept__toggle.is-open .ic-kept__chevron { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .ic-card__annotate, .ic-kept__chevron { transition: none; } }
+.ic .vc-send { min-width: 14rem; }
 
 .vc-controls { padding: var(--sapContent_Space_Small) 0 var(--sapContent_Space_Medium); border-top: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); }
 .vc-controls__row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sapContent_Space_Medium); }

@@ -3,7 +3,7 @@
 //
 //   const c = createControls(ctx, { showFinish, sendLabelKey });
 //   c.el, c.recButton, c.sendBtn, c.finishBtn, c.timerSlot
-//   c.recordingStarted(), c.recordingTick(s), c.recordingLevel(l), c.recordingStopped(rec), c.setSendLabel(key)
+//   c.recordingStarted(), c.recordingTick(s), c.recordingLevel(l), c.recordingStopped(rec), c.setSendLabel(key, vars)
 import { h, icon } from '../dom.js';
 import { t } from '../strings.js';
 
@@ -50,6 +50,6 @@ export function createControls(ctx, { showFinish = true, sendLabelKey = 'canvas.
       idle();
       if (rec?.reason === 'maxLength') recStatus.textContent = t('canvas.recordingMax', { seconds: config.interaction.maxRecordingSeconds });
     },
-    setSendLabel(key) { sendText.textContent = t(key); },
+    setSendLabel(key, vars) { sendText.textContent = t(key, vars); },
   };
 }

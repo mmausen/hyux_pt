@@ -5,10 +5,11 @@
 //   'scaffold', via /api/intents/start). A task without one starts like the voice mode instead:
 //   recordings build an instruction, which is sent as spoken and produces the first draft.
 //   From then on: each recording is transcribed and split by the LLM into one or more intents, shown as
-//   cards next to the draft (newest first). A card has a short description, a switch (on/off) and a
-//   hold-to-change button; an annotation is transcribed and the LLM rewrites the intent on release.
-//   Send hands the AI only the active intents plus the latest draft (no history), which gives the next
-//   version. Cards stay; new recordings add new cards.
+//   cards next to the draft (newest first). A card has the request, the participant's reason and their
+//   own words (folded), a checkbox (on/off) and a hold-to-change microphone; an annotation is transcribed
+//   and the LLM rewrites the intent (and its reason) on release. Send hands the AI only the active intents
+//   (with their reasons) plus the latest draft (no history), which gives the next version. Cards stay;
+//   those in the latest version go into a collapsed "In the draft" group. New recordings add new cards.
 //
 // Same interface as the voice canvas (createCanvas(ctx, options) → { el, timerSlot, noticeSlot, regions,
 // getRegion, onFinishRequest, isBusy, whenIdle, setLocked, stopRecording, destroy }). Extra regions for the
@@ -37,6 +38,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   let transcribing = false; // main record button
   let inputError = null; // { key, retry }: main recording, transcription or extraction
   let extracting = 0; // extractions running
+  const finding = []; // their transcripts, shown while the intents are being found
   let noneFound = false; // the last recording held no intent
   let locked = !live;
   let destroyed = false;
@@ -133,26 +135,43 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   }
 
   // ----- intent cards -----
-  // A card keeps its DOM (and its recorder) across renders; render() only reorders and updates them.
-  function lastSentAt(intent) {
+  // A card shows the request, the participant's reason ("Why") and, folded, their own words. A card keeps
+  // its DOM (and its recorder) across renders; render() only moves and updates it.
+  // State of an intent: 'new' (never sent), 'changed' (changed by voice since it was last sent),
+  // 'applied' (sent in the latest version and unchanged since: it is in the draft) or 'earlier' (last sent
+  // in an older version, e.g. it was off when the latest version was written). Applied cards go into a
+  // collapsed group under the others, so what is new stays in view. Switching a card on or off never
+  // moves it; a change by voice moves an applied card back up.
+  function stateOf(intent) {
     const n = intent.sentIn?.at(-1);
-    return n ? conv.turns.find((x) => x.n === n)?.sentAt ?? null : null;
+    if (!n) return 'new';
+    const sentAt = conv.turns.find((x) => x.n === n)?.sentAt;
+    if (sentAt && (intent.annotations ?? []).some((a) => a.at > sentAt)) return 'changed';
+    return n === conv.turns.at(-1)?.n ? 'applied' : 'earlier';
   }
+  const stateLabel = (intent, state) => (state === 'new' ? t('intents.tagNew') : state === 'changed' ? t('intents.tagChanged') : t('intents.tagSent', { n: versionOf(intent.sentIn.at(-1)) }));
 
   function createCard(intent) {
     const id = intent.id;
     const textEl = h('p.ic-card__text');
-    const tags = h('div.ic-card__tags');
-    const toggle = h('input', { type: 'checkbox', role: 'switch' });
-    const switchLabel = h('label.fh-switch.ic-card__switch', toggle, h('span.fh-switch__track'), h('span.ic-card__switch-text'));
-    const annotateLabel = h('span', t(ptt ? 'intents.annotateHold' : 'intents.annotateStart'));
-    const annotateBtn = h('button.fh-btn.fh-btn--transparent.ic-card__annotate', { type: 'button' }, icon('microphone'), annotateLabel);
+    const reasonText = h('span');
+    const reasonEl = h('p.ic-card__reason', h('span.ic-card__why', t('intents.why')), reasonText);
+    const quoteText = h('q');
+    const quoteEl = h('details.ic-card__quote', h('summary', t('intents.yourWords')), h('p', quoteText));
+    quoteEl.addEventListener('toggle', () => logEvent('intent.quoteToggled', { id, open: quoteEl.open }));
+    const stateText = h('span');
+    const stateEl = h('span.ic-card__state', h('span.ic-card__dot', { 'aria-hidden': 'true' }), stateText);
+    const toggle = h('input', { type: 'checkbox' });
+    const check = h('label.fh-checkbox.ic-card__check', toggle, h('span.fh-checkbox__box'));
+    const annotateBtn = h('button.fh-btn.fh-btn--transparent.fh-btn--icon.ic-card__annotate', { type: 'button' }, icon('microphone'));
     const status = h('div.ic-card__status', { 'aria-live': 'polite' });
     const errorSlot = h('div');
     const el = h('li.ic-card', { dataset: { intent: id } },
-      h('div.ic-card__head', tags, switchLabel),
-      textEl,
-      h('div.ic-card__foot', annotateBtn, status),
+      h('div.ic-card__row',
+        check,
+        h('div.ic-card__body', textEl, reasonEl, quoteEl),
+        h('div.ic-card__side', stateEl, annotateBtn)),
+      status,
       errorSlot);
 
     // transcribing: the annotation is being converted to text; annotating: the LLM rewrites the intent.
@@ -164,7 +183,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       intentNow.active = active;
       card.error = null;
       remember();
-      logEvent('intent.toggled', { id, active, activeCount: activeIntents().length });
+      logEvent('intent.toggled', { id, active, activeCount: activeIntents().length, state: stateOf(intentNow) });
       render();
       try {
         await api.intents.setActive(round, id, active);
@@ -219,51 +238,84 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       });
     }
 
-    card.parts = { textEl, tags, toggle, switchLabel, annotateBtn, annotateLabel, status, errorSlot };
+    card.parts = { textEl, reasonEl, reasonText, quoteEl, quoteText, stateEl, stateText, toggle, check, annotateBtn, status, errorSlot };
     return card;
   }
 
+  const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
+
   function updateCard(card, intent) {
-    const { textEl, tags, toggle, switchLabel, annotateBtn, annotateLabel, status, errorSlot } = card.parts;
+    const { textEl, reasonEl, reasonText, quoteEl, quoteText, stateEl, stateText, toggle, check, annotateBtn, status, errorSlot } = card.parts;
     const inflight = Boolean(conv.inflight);
     const recording = card.recordingSeconds !== null;
+    const state = stateOf(intent);
     card.el.classList.toggle('is-off', !intent.active);
     card.el.classList.toggle('is-busy', card.busy);
     card.el.classList.toggle('is-recording', recording);
-    if (textEl.textContent !== intent.text) textEl.textContent = intent.text;
+    card.el.dataset.state = state;
 
-    const sentAt = lastSentAt(intent);
-    const changed = sentAt && (intent.annotations ?? []).some((a) => a.at > sentAt);
-    clear(tags);
-    if (!intent.sentIn?.length) tags.append(h('span.fh-tag.fh-tag--information', t('intents.tagNew')));
-    else if (changed) tags.append(h('span.fh-tag.fh-tag--warning', t('intents.tagChanged')));
-    else tags.append(h('span.fh-tag', t('intents.tagSent', { n: versionOf(intent.sentIn.at(-1)) })));
+    setText(textEl, intent.text);
+    reasonEl.hidden = !intent.reason;
+    setText(reasonText, intent.reason ?? '');
+    const quote = intent.quote || intent.transcript || '';
+    quoteEl.hidden = !quote;
+    setText(quoteText, quote);
+
+    // An applied card sits in the "In the draft" group, which already says so: the dot is enough.
+    const label = stateLabel(intent, state);
+    setText(stateText, label);
+    stateText.className = state === 'applied' ? 'app-sr-only' : '';
+    stateEl.title = label;
 
     toggle.checked = Boolean(intent.active);
     toggle.disabled = locked || inflight;
+    check.classList.toggle('fh-checkbox--disabled', toggle.disabled);
     toggle.setAttribute('aria-label', t('intents.useLabel', { text: intent.text }));
-    switchLabel.lastChild.textContent = t(intent.active ? 'intents.on' : 'intents.off');
 
     const canAnnotate = !locked && !inflight && !card.busy && (recording || !anyRecording());
     if (card.input) {
       if (recording) annotateBtn.disabled = locked;
       else card.input.setEnabled(canAnnotate);
     } else annotateBtn.disabled = true;
-    annotateBtn.setAttribute('aria-label', `${t(ptt ? 'intents.annotateHold' : 'intents.annotateStart')}: ${intent.text}`);
-    annotateLabel.textContent = recording && !ptt ? t('intents.annotateStop') : t(ptt ? 'intents.annotateHold' : 'intents.annotateStart');
+    const action = recording && !ptt ? t('intents.annotateStop') : t(ptt ? 'intents.annotateHold' : 'intents.annotateStart');
+    annotateBtn.title = action;
+    annotateBtn.setAttribute('aria-label', `${action}: ${intent.text}`);
 
     clear(status);
     if (recording) status.append(t('canvas.recordingStatus', { seconds: card.recordingSeconds }));
     else if (card.busy) status.append(busy(t('intents.updating')));
+    status.hidden = !status.firstChild;
     clear(errorSlot).append(errorStrip(card.error) ?? '');
   }
 
   const listEl = h('ol.ic-list');
+  // Applied cards: a collapsed group under the others.
+  let keptOpen = false;
+  const keptList = h('ol.ic-list', { id: `ic-kept-${round}` });
+  const keptLabel = h('span');
+  const keptToggle = h('button.fh-btn.fh-btn--transparent.ic-kept__toggle', { type: 'button', 'aria-controls': keptList.id }, icon('slim-arrow-right', 'ic-kept__chevron'), keptLabel);
+  keptToggle.addEventListener('click', () => {
+    keptOpen = !keptOpen;
+    logEvent('intents.keptToggled', { open: keptOpen, count: keptList.children.length });
+    render();
+  });
+  const kept = h('div.ic-kept', keptToggle, keptList);
   const panelCount = h('span.ic-panel__count');
   const panelBody = h('div.ic-panel__body', { tabindex: '-1' });
   const panel = h('aside.ic-panel', { dataset: { region: 'intents' }, 'aria-label': t('intents.panelLabel') },
     h('div.ic-panel__head', h('div.vc-instruction__label', t('intents.panelLabel')), panelCount),
     panelBody);
+
+  // Puts the cards into a list in this order, moving only those that are out of place. Moving an element
+  // takes the focus away from it, so the focus is put back.
+  function place(list, ordered) {
+    const focused = document.activeElement;
+    ordered.forEach((card, i) => {
+      if (list.children[i] !== card.el) list.insertBefore(card.el, list.children[i] ?? null);
+    });
+    while (list.children.length > ordered.length) list.lastElementChild.remove();
+    if (focused && focused !== document.activeElement && document.contains(focused)) focused.focus({ preventScroll: true });
+  }
 
   function renderPanel() {
     const active = activeIntents().length;
@@ -272,24 +324,51 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     for (const [id, card] of cards) {
       if (!intents.some((x) => x.id === id)) { card.input?.destroy(); card.el.remove(); cards.delete(id); }
     }
-    const ordered = [...intents].reverse(); // newest first
-    for (const intent of ordered) {
+    const open = [];
+    const applied = [];
+    for (const intent of [...intents].reverse()) { // newest first
       if (!cards.has(intent.id)) cards.set(intent.id, createCard(intent));
-    }
-    ordered.forEach((intent, i) => {
       const card = cards.get(intent.id);
       updateCard(card, intent);
-      if (listEl.children[i] !== card.el) listEl.insertBefore(card.el, listEl.children[i] ?? null);
-    });
+      (stateOf(intent) === 'applied' ? applied : open).push(card);
+    }
+    // A card that is moving between the lists leaves its old one first.
+    for (const card of open) if (card.el.parentNode === keptList) card.el.remove();
+    for (const card of applied) if (card.el.parentNode === listEl) card.el.remove();
+    place(listEl, open);
+    place(keptList, applied);
+
+    kept.hidden = !applied.length;
+    // A recording or a change running in the group keeps it open.
+    const keptBusy = applied.some((c) => c.busy || c.recordingSeconds !== null);
+    const showKept = keptOpen || keptBusy || !live;
+    keptList.hidden = !showKept;
+    keptToggle.setAttribute('aria-expanded', String(showKept));
+    keptToggle.classList.toggle('is-open', showKept);
+    keptLabel.textContent = t('intents.kept', { n: applied.length });
 
     const top = [];
     if (transcribing) top.push(h('div.ic-pending', busy(t('canvas.transcribing'))));
-    for (let i = 0; i < extracting; i++) top.push(h('div.ic-pending', busy(t('intents.finding'))));
+    // What the participant said appears at once, while the intents are being found in it.
+    for (const text of finding) top.push(h('div.ic-pending', busy(t('intents.finding')), h('q.ic-pending__text', text)));
     if (inputError) top.push(errorStrip(inputError));
     if (noneFound && !extracting && !transcribing) top.push(messageStrip('information', t('intents.noneFound')));
-    if (!intents.length && !extracting && !transcribing) top.push(h('p.vc-draft__empty', t(ptt ? 'intents.emptyPushToTalk' : 'intents.emptyToggle')));
-    clear(panelBody).append(...top, listEl);
+    const idle = !extracting && !transcribing;
+    if (!intents.length && idle) top.push(h('p.vc-draft__empty', t(ptt ? 'intents.emptyPushToTalk' : 'intents.emptyToggle')));
+    else if (!open.length && idle) top.push(h('p.vc-draft__empty', t(ptt ? 'intents.allAppliedPushToTalk' : 'intents.allAppliedToggle')));
+    clear(panelBody).append(...top, listEl, kept);
     return panel;
+  }
+
+  // The send button says what goes into the next version: intents not in the draft yet, and those kept.
+  function sendLabel() {
+    const active = activeIntents();
+    const keptN = active.filter((x) => stateOf(x) === 'applied').length;
+    const newN = active.length - keptN;
+    if (newN && keptN) return ['intents.sendNewKept', { new: newN, kept: keptN }];
+    if (newN) return [newN === 1 ? 'intents.sendOneNew' : 'intents.sendNew', { new: newN }];
+    if (keptN) return ['intents.sendKept', { kept: keptN }];
+    return ['intents.send'];
   }
 
   // ----- render -----
@@ -310,7 +389,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       ? (inflight ? instructionBlock(inflight) : draftBlock())
       : renderPanel();
     if (side.firstChild !== right) clear(side).append(right);
-    controls.setSendLabel(hasDraft() ? 'intents.send' : 'canvas.send');
+    controls.setSendLabel(...(hasDraft() ? sendLabel() : ['canvas.send']));
     renderControls();
   }
 
@@ -331,6 +410,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   // ----- main recording: first instruction, then new intents -----
   async function extract(text) {
     extracting++;
+    finding.unshift(text);
     noneFound = false;
     const busyKey = `extract:${Math.random().toString(36).slice(2)}`;
     conv.setBusy(busyKey, true);
@@ -350,6 +430,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       inputError = { key: errorKey(e) ?? 'intentsExtract', retry: () => { inputError = null; extract(text); } };
     } finally {
       extracting--;
+      finding.splice(finding.indexOf(text), 1);
       conv.setBusy(busyKey, false);
       if (!destroyed) render();
     }
@@ -403,8 +484,8 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     const active = activeIntents();
     if (!active.length) return;
     noneFound = false;
-    await conv.send(active.map((x) => `- ${x.text}`).join('\n'),
-      { step: 'intents', intents: active.length, intentIds: active.map((x) => x.id), inactive: intents.length - active.length },
+    await conv.send(active.map((x) => `- ${x.text}${x.reason ? ` (why: ${x.reason})` : ''}`).join('\n'),
+      { step: 'intents', intents: active.length, intentIds: active.map((x) => x.id), inactive: intents.length - active.length, kept: active.filter((x) => stateOf(x) === 'applied').length },
       { intentIds: active.map((x) => x.id) });
   }
   sendBtn.addEventListener('click', send);

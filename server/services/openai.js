@@ -2,10 +2,45 @@
 // Interface (shared with mock.js):
 //   transcribe({ buffer, mimetype, filename, signal }) -> { text }
 //   respond({ messages, onDelta, signal }) -> { text, usage }
-//   structured({ kind, instructions, input, schema, signal }) -> { data, usage }   (JSON that matches schema;
+//   structured({ kind, instructions, input, schema, signal }) -> { data, usage, attempt?, attempts? }   (JSON that matches schema;
 //     kind 'extractIntents' | 'annotateIntent' only matters to the mock)
 //   health({ signal }) -> { ok, model }
 import OpenAI, { toFile } from 'openai';
+
+// Runs run(signal); if it has not settled after `after` ms, runs it a second time in parallel. Resolves
+// with the first success ({ ...result, attempt, attempts }: which request won, how many were started),
+// cancels the other, and rejects only when every started request failed. A failure before the second
+// request has started is final (the SDK has already retried it).
+export function hedged(run, { signal, after }) {
+  return new Promise((resolve, reject) => {
+    const runs = [];
+    let done = false;
+    let timer = null;
+    const finish = (settle, value) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      for (const r of runs) r.ctrl.abort();
+      settle(value);
+    };
+    const launch = () => {
+      if (done || signal?.aborted) return;
+      const ctrl = new AbortController();
+      const entry = { ctrl, failed: false };
+      runs.push(entry);
+      const attempt = runs.length;
+      run(signal ? AbortSignal.any([signal, ctrl.signal]) : ctrl.signal).then(
+        (value) => finish(resolve, { ...value, attempt, attempts: runs.length }),
+        (e) => {
+          entry.failed = true;
+          if (runs.every((r) => r.failed)) finish(reject, e);
+        },
+      );
+    };
+    launch();
+    timer = setTimeout(launch, after);
+  });
+}
 
 export function createOpenAiService({ config, env }) {
   const client = env.hasApiKey ? new OpenAI({ apiKey: env.apiKey, maxRetries: 1 }) : null;
@@ -54,13 +89,20 @@ export function createOpenAiService({ config, env }) {
       return { text, usage };
     },
 
+    // Short calls the participant waits for (intents). Usually 2–3 s, but now and then one request takes
+    // much longer at the API. So if no answer has come after ai.intents.hedgeAfterSeconds, a second,
+    // identical request starts; the first answer wins and the other request is cancelled.
     async structured({ instructions, input, schema, signal }) {
       const params = requestParams(input, { stream: false, maxOutputTokens: config.ai.intents.maxOutputTokens, instructions });
       params.text = { format: { type: 'json_schema', name: 'result', schema, strict: true } };
-      const res = await need().responses.create(params, { signal });
-      let data;
-      try { data = JSON.parse(res.output_text ?? ''); } catch { throw new Error('The model did not return valid JSON'); }
-      return { data, usage: res.usage ?? null };
+      const once = async (sig) => {
+        const res = await need().responses.create(params, { signal: sig });
+        let data;
+        try { data = JSON.parse(res.output_text ?? ''); } catch { throw new Error('The model did not return valid JSON'); }
+        return { data, usage: res.usage ?? null };
+      };
+      const after = (config.ai.intents.hedgeAfterSeconds ?? 0) * 1000;
+      return after > 0 ? hedged(once, { signal, after }) : once(signal);
     },
 
     async health({ signal }) {

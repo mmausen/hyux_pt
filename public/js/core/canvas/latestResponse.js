@@ -8,6 +8,7 @@
 //   view.markUpdated() a response just finished
 //   view.destroy()
 import { h, icon, clear, messageStrip } from '../dom.js';
+import { cleanResponse } from '../cleanResponse.js';
 import { t } from '../strings.js';
 
 const timeOf = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -40,8 +41,9 @@ export function createLatestResponse({ assistant, scroller, latest = null, label
 
   function block(turn, { streaming = false } = {}) {
     const body = h('div.fh-msg-agent__body');
-    if (streaming && !turn.response) body.append(busy(t('canvas.working')));
-    else body.append(h('p.vc-response', turn.response));
+    const text = streaming ? cleanResponse(turn.response, { partial: true }) : turn.response;
+    if (streaming && !text) body.append(busy(t('canvas.working')));
+    else body.append(h('p.vc-response', text));
     if (!streaming) renderUpdated();
     return h('div.fh-msg-agent.vc-turn__response', agentAvatar(), h('div.vc-turn__agent',
       h('div.vc-turn__meta', h('span.vc-turn__name', assistant), (() => { const l = label(turn); return l ? h('span', l) : null; })(),
@@ -63,9 +65,13 @@ export function createLatestResponse({ assistant, scroller, latest = null, label
       shownKey = key;
       return root;
     },
-    delta(text) {
+    delta(raw) {
       const body = root?.querySelector('.fh-msg-agent__body');
       if (!body) return false;
+      // While streaming, an introduction of the model ("Here is the revised version:") is held back and
+      // removed, as the server does with the finished response.
+      const text = cleanResponse(raw, { partial: true });
+      if (!text) return true; // keep the "working" indicator until the text itself starts
       const p = body.querySelector('.vc-response');
       if (p) p.textContent = text;
       else clear(body).append(h('p.vc-response', text));

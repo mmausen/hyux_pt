@@ -183,6 +183,11 @@ export default {
     on: 'On',
     off: 'Off',
     useLabel: 'Use intent: {text}',
+    why: 'Why',
+    yourWords: 'Your words',
+    kept: 'In the draft ({n})', // intents in the latest version, unchanged since (collapsed group)
+    allAppliedPushToTalk: 'Everything here is in the draft. Hold the record button and say what else to change.',
+    allAppliedToggle: 'Everything here is in the draft. Select the record button and say what else to change.',
     annotateHold: 'Hold to Change',
     annotateStart: 'Change by Voice',
     annotateStop: 'Stop Recording',
@@ -190,6 +195,11 @@ export default {
     tagChanged: 'Changed',
     tagSent: 'In Version {n}',
     send: 'Send Intents',
+    // The send button counts what goes into the next version: new or changed intents, and those kept.
+    sendNewKept: 'Send {new} New + {kept} Kept',
+    sendOneNew: 'Send 1 New Intent',
+    sendNew: 'Send {new} New Intents',
+    sendKept: 'Send {kept} Kept',
   },
   tutorial: {
     progress: '{step} of {total}',
@@ -209,13 +219,13 @@ export default {
     },
     intents: {
       task: { title: 'Your Task', text: 'Your task and its situation are always shown at the top. Select Hide Situation if you need more room for your work.' },
-      recordPushToTalk: { title: 'Speak Your Thoughts', text: 'Hold this button, or the Space key, while you say what you want to change in the draft. What you say becomes intents: short change requests for the draft.' },
-      recordToggle: { title: 'Speak Your Thoughts', text: 'Select this button to start recording, say what you want to change in the draft and select it again when you are done. What you say becomes intents: short change requests for the draft.' },
+      recordPushToTalk: { title: 'Speak Your Thoughts', text: 'Hold this button, or the Space key, while you say what you want to change in the draft and why. What you say becomes intents: short change requests for the draft, with your reasons.' },
+      recordToggle: { title: 'Speak Your Thoughts', text: 'Select this button to start recording, say what you want to change in the draft and why, and select it again when you are done. What you say becomes intents: short change requests for the draft, with your reasons.' },
       output: { title: 'Read the Draft', text: 'Each task starts with a generic starting draft: a plain outline for you to shape. The assistant’s latest version appears here; each new version replaces the previous one, and the time next to it shows when it was last updated.' },
-      intents: { title: 'Your Intents', text: 'Each thing you ask for appears here as a card, newest first. One recording can give several intents. “New” marks intents that have not been sent yet.' },
-      cardPushToTalk: { title: 'Switch or Change an Intent', text: 'Switch an intent off to leave it out of the next version. To change an intent, hold its microphone button and say what to change; it is updated when you release the button.' },
-      cardToggle: { title: 'Switch or Change an Intent', text: 'Switch an intent off to leave it out of the next version. To change an intent, select its microphone button, say what to change and select it again; it is updated then.' },
-      send: { title: 'Send the Intents', text: 'Sends the intents that are switched on, together with the latest draft, to the assistant. It writes a new version from them; earlier versions are not sent.' },
+      intents: { title: 'Your Intents', text: 'Each thing you ask for appears here as a card, newest first, with your reason under “Why”. One recording can give several intents. “New” marks intents that have not been sent yet; intents already in the draft move to a folded group at the bottom.' },
+      cardPushToTalk: { title: 'Use or Change an Intent', text: 'Clear the box to leave an intent out of the next version. Select “Your words” to see what you said. To change an intent, hold its microphone button and say what to change; it is updated when you release the button.' },
+      cardToggle: { title: 'Use or Change an Intent', text: 'Clear the box to leave an intent out of the next version. Select “Your words” to see what you said. To change an intent, select its microphone button, say what to change and select it again; it is updated then.' },
+      send: { title: 'Send the Intents', text: 'Sends the intents that are ticked, with your reasons and the latest draft, to the assistant. It writes a new version from them; earlier versions are not sent. The button shows how many intents are new and how many are kept from the draft.' },
       timer: { title: 'Keep an Eye on the Time', text: 'This bar fills up as time passes. Time keeps running while the assistant writes.' },
       finish: { title: 'Finish the Task', text: 'Select Finish Task when you are happy with the result. You can finish at any time, also before the time limit.' },
     },
@@ -237,9 +247,9 @@ export default {
       // Intents mode: the tour shows this starting draft instead of the turns above.
       scaffold: 'Subject: [Subject line]\n\nDear [Name],\n\n[Thank the customer for the meeting.]\n\n[Refer to what was discussed and what you send with this email.]\n\n[Closing and next step.]\n\nBest regards,\n[Your name]',
       intents: [
-        { text: 'Use a less formal greeting', active: false },
-        { text: 'Make it a bit more personal' },
-        { text: 'Mention the new delivery options' },
+        { text: 'Use a less formal greeting', reason: '', quote: 'Maybe a less formal greeting.', active: false },
+        { text: 'Make it a bit more personal', reason: 'We have known each other for years', quote: 'Make it a bit more personal, we have known each other for years.' },
+        { text: 'Mention the new delivery options', reason: 'He asked about shorter delivery times', quote: 'And mention the new delivery options, he asked about shorter delivery times.' },
       ],
     },
     practice: {

@@ -13,8 +13,8 @@ const TRANSCRIPTS = [
 
 const RESPONSES = [
   'Subject: Following up on our demo\n\nHi Laura,\n\nWhen we spoke three months ago, you mentioned two open points: the effort to implement and the timing of your budget. Both are easier to plan now than they were then.\n\nA company in your sector has just gone live with us in six weeks, without extra IT staff. I would be glad to share how they did it.\n\nWould a 20-minute call next week work for you?\n\nBest regards',
-  'Here is a more personal version. It refers to her recent post on warehouse automation and puts the implementation concern first.\n\nHi Laura,\n\nI read your post on automating warehouse handovers and it reminded me of our demo in spring. You were worried about the implementation effort, and that is exactly where we have learned the most since.\n\nCould we find 20 minutes next week?\n\nBest regards',
-  'Shortened to five sentences:\n\nHi Laura, I enjoyed your recent post on warehouse automation. Since our demo, we have cut typical implementation time to six weeks. A logistics company close to yours went live this quarter. I would like to show you how they budgeted for it. Do you have 20 minutes next Tuesday or Wednesday?',
+  'Hi Laura,\n\nI read your post on automating warehouse handovers and it reminded me of our demo in spring. You were worried about the implementation effort, and that is exactly where we have learned the most since.\n\nCould we find 20 minutes next week?\n\nBest regards',
+  'Hi Laura, I enjoyed your recent post on warehouse automation. Since our demo, we have cut typical implementation time to six weeks. A logistics company close to yours went live this quarter. I would like to show you how they budgeted for it. Do you have 20 minutes next Tuesday or Wednesday?',
 ];
 
 export function createMockService({ config }) {
@@ -38,17 +38,30 @@ export function createMockService({ config }) {
       }
       return { text, usage: null };
     },
-    // Intents without an LLM: one intent per sentence or "and"-clause of the comment; an annotation is
-    // appended to the intent. Good enough to click through the intents mode.
+    // Intents without an LLM: one intent per sentence or "and"-clause of the comment (the part after
+    // "because" or a comma is its reason); an annotation is appended to the intent. Good enough to
+    // click through the intents mode.
     async structured({ kind, input, signal }) {
       await sleep(latency(), signal);
       const text = String(input.at(-1)?.content ?? '');
       const said = (label) => (text.split(`${label}:\n`)[1] ?? '').split('\n\n')[0].trim();
       const short = (s) => s.split(/\s+/).slice(0, 12).join(' ').replace(/[.,;:]+$/, '');
       const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-      if (kind === 'annotateIntent') return { data: { text: cap(short(`${said('Intent')}, ${said('Annotation')}`)) }, usage: null };
+      if (kind === 'annotateIntent') {
+        const reason = said('Reason');
+        return { data: { text: cap(short(`${said('Intent')}, ${said('Annotation')}`)), reason: reason === '(none given)' ? '' : reason }, usage: null };
+      }
       const parts = said('Comment').split(/(?<=[.!?])\s+|,?\s+and\s+(?:also\s+)?/i).map((s) => s.trim()).filter((s) => s.split(/\s+/).length >= 2);
-      return { data: { intents: parts.slice(0, 3).map((p) => ({ text: cap(short(p)) })) }, usage: null };
+      // "X because Y" or "X, Y": Y is the reason.
+      return {
+        data: {
+          intents: parts.slice(0, 3).map((p) => {
+            const [, ask = p, why = ''] = p.match(/^(.+?)(?:,?\s+because\s+|,\s+)(.+)$/i) ?? [];
+            return { text: cap(short(ask)), reason: why ? cap(short(why.replace(/[.!?]+$/, ''))) : '', quote: p };
+          }),
+        },
+        usage: null,
+      };
     },
 
     async health({ signal }) {

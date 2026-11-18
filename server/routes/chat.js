@@ -8,6 +8,7 @@ import { Router } from 'express';
 import { requireSession, useMock } from '../middleware/session.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { latestDraft } from './intents.js';
+import { cleanResponse } from '../../public/js/core/cleanResponse.js';
 
 const MAX_CHARS = 4000;
 
@@ -44,7 +45,8 @@ export function chatRoutes(app) {
       const draft = latestDraft(roundData);
       intents = (roundData.intents ?? []).filter((x) => intentIds.includes(x.id));
       if (!draft || !intents.length) return res.status(400).json({ error: 'no_intents' });
-      text = intents.map((x) => `- ${x.text}`).join('\n');
+      // Each intent with the participant's reason, when they gave one.
+      text = intents.map((x) => `- ${x.text}${x.reason ? ` (why: ${x.reason})` : ''}`).join('\n');
       history = [];
       input = `${config.ai.intents.reviseInstruction}\n\nIntents:\n${text}\n\nCurrent draft:\n${draft}`;
     } else {
@@ -58,7 +60,7 @@ export function chatRoutes(app) {
       input = text;
     }
     const turn = { n: roundData.turns.length + 1, transcript: text, response: '', status: 'pending', sentAt: new Date().toISOString() };
-    if (intents) turn.intents = intents.map(({ id, text: t }) => ({ id, text: t }));
+    if (intents) turn.intents = intents.map(({ id, text: t, reason }) => ({ id, text: t, reason: reason ?? '' }));
     roundData.turns.push(turn);
     await store.update(session, (s) => { s.rounds[key] = roundData; });
 
@@ -82,10 +84,17 @@ export function chatRoutes(app) {
         onDelta: (d) => { if (firstTokenMs === null) firstTokenMs = Date.now() - started; send({ type: 'delta', text: d }); },
         signal: AbortSignal.timeout(config.ai.timeoutSeconds * 1000),
       });
-      Object.assign(turn, { response: out.text, status: 'done', respondedAt: new Date().toISOString(), latencyMs: Date.now() - started, firstTokenMs, usage: out.usage ?? undefined, mock: service === mock || undefined });
+      // Only the text itself is kept as the response: an introduction or closing comment of the model is
+      // removed (the raw text is kept in rawResponse and logged).
+      const response = cleanResponse(out.text) || out.text;
+      if (response !== out.text) turn.rawResponse = out.text;
+      Object.assign(turn, { response, status: 'done', respondedAt: new Date().toISOString(), latencyMs: Date.now() - started, firstTokenMs, usage: out.usage ?? undefined, mock: service === mock || undefined });
       for (const x of intents ?? []) x.sentIn = [...(x.sentIn ?? []), turn.n];
       await store.update(session, () => {});
-      log.write('server.ai.response', { turn: turn.n, latencyMs: turn.latencyMs, firstTokenMs, chars: out.text.length, text: out.text, usage: out.usage ?? null });
+      log.write('server.ai.response', {
+        turn: turn.n, latencyMs: turn.latencyMs, firstTokenMs, chars: response.length, text: response,
+        ...(turn.rawResponse ? { cleaned: true, rawText: out.text } : {}), usage: out.usage ?? null,
+      });
       send({ type: 'done', turn });
     } catch (e) {
       const error = e.name === 'TimeoutError' ? 'llm_timeout' : 'llm_failed';
