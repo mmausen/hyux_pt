@@ -110,8 +110,8 @@ export default {
   canvas: {
     taskLabel: 'Your Task',
     situationLabel: 'Situation',
-    showSituation: 'Show Situation',
-    hideSituation: 'Hide Situation',
+    showTask: 'Show Task',
+    hideTask: 'Hide Task',
     conversationLabel: 'Conversation with the assistant',
     instructionLabel: 'Your Instruction',
     draftLabel: 'Current Instruction',
