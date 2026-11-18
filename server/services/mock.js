@@ -46,8 +46,19 @@ export function createMockService({ config }) {
     // "instead" or "no" revises the current intent of that group it shares a word with; "forget" or
     // "drop" takes it back. Structure: intents of a group that share a word are combined into one; the
     // rest stays. An annotation is appended to the intent.
-    async structured({ kind, input, signal }) {
+    async structured({ kind, input, context = {}, signal }) {
       await sleep(latency(), signal);
+      // Compare mode: two canned versions; then the pick with the annotation's words worked in, and a
+      // profile that collects the annotations.
+      if (kind === 'compareInitial') {
+        return { data: { a: RESPONSES[0], b: RESPONSES[1], differences: ['A recaps the demo, B opens with a post of the customer'] }, usage: null };
+      }
+      if (kind === 'compareNext') {
+        const said = String(context.annotation ?? '').replace(/[.!?]+$/, '');
+        const paras = String(context.chosen ?? '').split('\n\n');
+        paras.splice(Math.max(1, paras.length - 1), 0, `(Round ${context.step}: more of what you liked: ${said}.)`);
+        return { data: { profile: [...(context.profile ?? []), `Likes: ${said}`].slice(-12), challenger: paras.join('\n\n'), differences: ['Adds one paragraph'] }, usage: null };
+      }
       const text = String(input.at(-1)?.content ?? '');
       const said = (label) => (text.split(`${label}:\n`)[1] ?? '').split('\n\n')[0].trim();
       const short = (s, n = 6) => s.replace(/^(please|also|maybe|i want you to|can you|could you)\s+/i, '').split(/\s+/).slice(0, n).join(' ').replace(/[.,;:]+$/, '');

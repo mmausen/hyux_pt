@@ -44,6 +44,9 @@ export default {
     // Default interaction mode for new sessions (a folder in public/js/modes/). In dev mode the dev panel
     // can switch the current session.
     //   'voice'   : spoken instructions build the instruction; each send goes to the AI with the history.
+    //   'compare' : two similar versions side by side. The participant picks one and says what they like
+    //               most about it; that feeds a hidden preference profile, the other version is replaced
+    //               by a new one written from the profile, until the participant accepts a version.
     //   'intents' : the task starts from its generic starting draft (`scaffold` in data/tasks.json; without
     //               one, the first instruction is sent as spoken). Each recording is split into intent
     //               cards that can be switched off or changed by voice; a send hands the AI only the
@@ -176,6 +179,38 @@ export default {
       // A second, identical intent request starts if the first has not answered after this many seconds;
       // the first answer is used. Cuts the rare very slow request (seen: 21 s instead of 2–3 s). 0 = off.
       hedgeAfterSeconds: 5,
+    },
+    // Prompts of the 'compare' mode (structured calls). The model sees the outline (the task's scaffold),
+    // the situation (if includeSituation) and, after the first pair, the hidden profile, the picked and
+    // the rejected version and what the participant said. Never the task itself.
+    compare: {
+      initialPrompt:
+        'Write two versions of the text that the outline describes, for its reader. Both follow the outline, ' +
+        'use only facts from the situation (do not invent figures, names or dates; keep a placeholder in ' +
+        'square brackets where a fact is missing) and have about the same length. Make them similar but not ' +
+        'the same: let them differ clearly in two or three choices a writer would make here, for example the ' +
+        'tone, what the text leads with, how hard it argues, which argument carries it, or how it handles a ' +
+        'weak point. Keep everything else alike, so a reader can tell what the difference is. Return a and b, ' +
+        'the two full texts (plain text without Markdown, no introduction or comment), and differences, one ' +
+        'short line per choice in which they differ (for example "A leads with cost savings, B with nurse ' +
+        'retention").',
+      nextPrompt:
+        'You help an author find the version of a text they want, one comparison at a time, and keep a hidden ' +
+        'profile of their preferences: short statements of what they want from this text, learned from their ' +
+        'choices. You receive the profile so far, the version they just picked, the version they rejected and ' +
+        'what they said they like most about their pick (transcribed automatically; it may contain ' +
+        'recognition errors). First update the profile: add what this choice and their words reveal, sharpen ' +
+        'or correct earlier statements and drop those this choice contradicts. Statements are concrete (for ' +
+        'example "Leads with nurse retention, not price"), at most 15 words each and at most 12 in total; ' +
+        'keep only what the choices and words support. Then write a new version to compare with the pick: ' +
+        'start from the pick, keep everything the profile settles, and change one or two aspects the profile ' +
+        'does not settle yet, so the next choice teaches something new. The more settled the profile and the ' +
+        'later the round, the smaller and subtler the difference. Keep the length and structure close to the ' +
+        'pick and use only facts from the situation. Return profile (the updated statements), challenger (the ' +
+        'full new text, plain text without Markdown, no introduction or comment) and differences (one short ' +
+        'line per aspect in which it differs from the pick).',
+      includeSituation: true, // the participant gives no facts in this mode, so the model sees the situation
+      maxOutputTokens: 4000, // two full versions in the first call
     },
   },
 

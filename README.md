@@ -135,6 +135,15 @@ Components sit in the group row after the groups, with a dashed outline; selecti
 
 Only one recording runs at a time, and recordings are collected one after the other. While the assistant writes or a recording is collected, the cards are locked. The task end waits for running transcriptions, collections and changes. Intents are stored with the session (`rounds[round].intents`) and survive a reload; merged, taken back, deleted and undone intents move to `rounds[round].removedIntents`.
 
+**`compare`** (branch `compare`). The participant never instructs the AI: they choose. Two similar versions stand side by side between the task (top) and the timer (bottom). No tutorial yet (the tutorial screen skips itself for a mode without `tutorialSteps`).
+
+1. **First pair.** `POST /api/compare/start` writes two versions from the outline (`scaffold`) and the situation (if `ai.compare.includeSituation`) that are alike except for two or three writing choices (`ai.compare.initialPrompt`).
+2. **Pick and say why.** The participant picks a version (**Pick This One**; they can switch), then holds the microphone in that card and says what they like most about it. **Show differences** highlights the words that differ between the two.
+3. **Next.** **Keep It, Show a New One** (`POST /api/compare/next`, `ai.compare.nextPrompt`) updates a hidden preference profile from the pick, the rejected version and what was said, and writes a new version from the pick: it keeps what the profile settles and varies one or two aspects it does not settle yet, more subtly as the profile grows. The kept version stays on its side, marked *Your last pick*; the other leaves and the new one (*New*) takes its place.
+4. **Accept.** **Accept as Final** marks the picked version as the result (`POST /api/compare/accept`) and asks to finish the task.
+
+The profile is never sent to the browser. Everything is stored with the session (`rounds[round].compare`: versions with their differences, the pair, the profile, every pick with the annotation and the profile before and after, the accepted version).
+
 ---
 
 ## Configuration reference
@@ -181,7 +190,7 @@ The tasks for a session are assigned when it starts and stored with it. Changing
 #### `interaction`
 | Option | Meaning |
 |---|---|
-| `mode` | Default interaction mode for new sessions (currently `'intents'`): a folder in `public/js/modes/` (`'voice'` or `'intents'`, see [Interaction modes](#interaction-modes)). The dev panel can switch the current session. |
+| `mode` | Default interaction mode for new sessions (currently `'compare'` on this branch): a folder in `public/js/modes/` (`'voice'`, `'intents'` or `'compare'`, see [Interaction modes](#interaction-modes)). The dev panel can switch the current session. |
 | `recordingMode` | `'pushToTalk'`: hold the button or the Space key. Space works only when focus isn't in a text field. `'toggle'`: select once to start and again to stop. The tutorial text follows this setting. |
 | `maxRecordingSeconds` | A recording stops automatically after this long and is transcribed. |
 
@@ -494,7 +503,7 @@ design-system/            Fiori Horizon export (don't edit; tokens.css is genera
 server/
   index.js                Express app, security headers, static files
   config/                 load + validate config, client-safe subset
-  routes/                 session, transcribe/health, chat (streaming), intents, log, dev
+  routes/                 session, transcribe/health, chat (streaming), intents, compare, log, dev
   services/               OpenAI calls, mocks, session store, task assignment
   middleware/             session check, rate limiting
   logger/                 logger interface + JSONL implementation
@@ -506,6 +515,7 @@ public/
   js/screens/             one module per screen: { mount(container, ctx), unmount() }
   js/modes/voice/         voice interaction mode: canvas + tutorial steps
   js/modes/intents/       intents interaction mode: canvas + tutorial steps
+  js/modes/compare/       compare interaction mode: canvas (two versions) and word diff
 dev-client/devPanel.js    dev panel (served only in dev mode)
 scripts/build-tokens.mjs  generates design-system/tokens.css
 ```

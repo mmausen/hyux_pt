@@ -20,6 +20,11 @@ export default function create() {
       const { config, session } = ctx;
       const mode = await ctx.getMode();
       if (gone) return;
+      // A mode without a tour (no tutorialSteps) skips the tutorial, practice turn included.
+      if (!mode.tutorialSteps) {
+        logEvent('tutorial.skipped', { mode: mode.name, reason: 'noTutorial' });
+        return ctx.flow.next();
+      }
       const host = h('div.app-canvas-host');
       container.append(host);
 

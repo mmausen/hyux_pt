@@ -62,6 +62,12 @@ export const api = {
     setComponents: (round, components) => request('PUT', '/api/intents/components', { json: { round, components } }),
     remove: (round, id) => request('DELETE', `/api/intents/${encodeURIComponent(id)}`, { json: { round } }),
   },
+  // Compare mode (server/routes/compare.js).
+  compare: {
+    start: (round, signal) => request('POST', '/api/compare/start', { json: { round }, signal }),
+    next: (round, chosenId, text, signal) => request('POST', '/api/compare/next', { json: { round, chosenId, text }, signal }),
+    accept: (round, versionId) => request('POST', '/api/compare/accept', { json: { round, versionId } }),
+  },
   dev: {
     startSession: () => request('POST', '/api/dev/session', { json: {} }),
     setMock: (mock) => request('PUT', '/api/dev/mock', { json: mock }),

@@ -97,6 +97,9 @@ export function validateConfig(config, { tasks, modes, hasApiKey, devMode }) {
     err('ai.intents.suggestedGroups', 'must be a list of { name, about }');
   }
   num('ai.intents.hedgeAfterSeconds', { min: 0, max: 600 });
+  str('ai.compare.initialPrompt'); str('ai.compare.nextPrompt');
+  bool('ai.compare.includeSituation');
+  num('ai.compare.maxOutputTokens', { min: 256, max: 32000, int: true });
 
   // stt
   str('stt.model');
