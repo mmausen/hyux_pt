@@ -73,6 +73,11 @@ export const api = {
     edit: (round, selection, text, signal) => request('POST', '/api/highlight/edit', { json: { round, ...selection, text }, signal }),
     challenge: (round, selection, text, signal) => request('POST', '/api/highlight/challenge', { json: { round, ...selection, text }, signal }),
   },
+  // Slider mode (server/routes/slider.js). Writing a version is /api/chat with { sliders }.
+  slider: {
+    start: (round) => request('POST', '/api/slider/start', { json: { round } }),
+    voice: (round, text, signal) => request('POST', '/api/slider/voice', { json: { round, text }, signal }),
+  },
   dev: {
     startSession: () => request('POST', '/api/dev/session', { json: {} }),
     setMock: (mock) => request('PUT', '/api/dev/mock', { json: mock }),

@@ -103,6 +103,9 @@ export function validateConfig(config, { tasks, modes, hasApiKey, devMode }) {
   str('ai.highlight.editPrompt'); str('ai.highlight.challengePrompt');
   num('ai.highlight.maxOutputTokens', { min: 64, max: 32000, int: true });
   num('ai.highlight.hedgeAfterSeconds', { min: 0, max: 600 });
+  str('ai.slider.writeInstruction'); str('ai.slider.anchorInstruction'); str('ai.slider.voicePrompt');
+  bool('ai.slider.includeSituation');
+  num('ai.slider.maxSliders', { min: 1, max: 8, int: true });
 
   // stt
   str('stt.model');
@@ -154,6 +157,9 @@ export function validateTasks(tasks) {
     const p = `data/tasks.json [${i}]${t?.id ? ` (${t.id})` : ''}`;
     for (const f of ['id', 'title', 'situation', 'task']) if (typeof t?.[f] !== 'string' || !t[f].trim()) errors.push(`${p}: '${f}' must be non-empty text`);
     if (typeof t?.briefing !== 'string') errors.push(`${p}: 'briefing' must be text (may be empty)`);
+    if (t?.sliders !== undefined && (!Array.isArray(t.sliders) || t.sliders.some((s) => ['theme', 'a', 'b'].some((f) => typeof s?.[f] !== 'string' || !s[f].trim())))) {
+      errors.push(`${p}: 'sliders' must be a list of { theme, a, b } (the slider mode's starting decisions)`);
+    }
     if (t?.scaffold !== undefined && typeof t.scaffold !== 'string') errors.push(`${p}: 'scaffold' must be text (may be empty)`);
     if (typeof t?.timeLimitMinutes !== 'number' || t.timeLimitMinutes <= 0) errors.push(`${p}: 'timeLimitMinutes' must be a positive number`);
     if (t?.materials !== undefined) {

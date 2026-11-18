@@ -151,6 +151,14 @@ The profile is never sent to the browser. Everything is stored with the session 
 3. **Send** asks the model for targeted edits (`ai.highlight.editPrompt`): the draft with the passage marked and the annotation go in, a list of `{ find, replace }` edits comes back. The server applies them (an edit that does not match is skipped; one that matches more than once is applied nearest to the passage) and stores the new draft as a turn with `kind: 'edit'`. Only the changed words flash in the draft.
 4. **Challenge Me** (in place of the send button) sends the draft, the highlighted passage and the annotation (`ai.highlight.challengePrompt`) and shows one short question in a popup above the button. It is not answered and changes nothing; the participant closes it when they want.
 
+**`slider`** (branch `slider`). The participant does not instruct the AI in words: they set decisions. The output is on the left, a slot machine of sliders on the right, the timer at the bottom. No tutorial yet (the tutorial screen skips itself for a mode without `tutorialSteps`).
+
+1. **Start.** The output shows the starting draft (`scaffold`). The sliders come from the task's `sliders` in `data/tasks.json`: each one decision (`theme`) with two opposite poles (`a`, `b`). Both are set up by `POST /api/slider/start` and stored with the session (`rounds[round].sliders`).
+2. **Sliders.** Each slider is a reel with five stops: strongly a, leaning a, balanced, leaning b, strongly b (new sliders start balanced). It turns with its arrows, the mouse wheel, dragging, the arrow keys or a click on a stop. Reels moved since the last version get a dot.
+3. **Send Settings** (at the base of the machine) writes a version from all positions (`/api/chat` with `{ sliders }`): the model gets `ai.slider.writeInstruction`, the situation (if `ai.slider.includeSituation`), the decisions, and the starting draft or, after it, the previous version with the changed decisions and `ai.slider.anchorInstruction` (keep everything the change does not affect). No history. The words that changed against the version before are highlighted (**Show changes** turns this off).
+4. **Same settings, same text.** The model takes no temperature or seed, so outputs are made reproducible in another way: each version is anchored on the previous one, and the same decisions in the same positions always return the version already written for them (from `rounds[round].sliderCache`, no model call; shown as *Version n (same settings as Version m)*). Every difference therefore comes from moving a slider.
+5. **By voice.** The microphone at the base adds or removes a slider (`POST /api/slider/voice`, `ai.slider.voicePrompt`): talking about an aspect to weigh up ("not sure how long this should be") creates a slider with the two extremes the AI finds ("Short, punchy note" ↔ "Full, detailed proposal"); naming a slider to drop removes it. At most `ai.slider.maxSliders`.
+
 ---
 
 ## Configuration reference

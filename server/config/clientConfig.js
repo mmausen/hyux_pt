@@ -16,7 +16,7 @@ export function buildClientConfig({ config, env, modes }) {
     interaction: { ...config.interaction },
     tutorial: { ...config.tutorial },
     timer: { ...config.timer },
-    ai: { assistantName: config.ai.assistantName, timeoutSeconds: config.ai.timeoutSeconds },
+    ai: { assistantName: config.ai.assistantName, timeoutSeconds: config.ai.timeoutSeconds, slider: { maxSliders: config.ai.slider.maxSliders } },
     stt: { timeoutSeconds: config.stt.timeoutSeconds },
     systemCheck: {
       testSentence: config.systemCheck.testSentence,

@@ -15,6 +15,7 @@ import { chatRoutes } from './routes/chat.js';
 import { intentRoutes } from './routes/intents.js';
 import { compareRoutes } from './routes/compare.js';
 import { highlightRoutes } from './routes/highlight.js';
+import { sliderRoutes } from './routes/slider.js';
 
 let loaded;
 try {
@@ -69,6 +70,7 @@ server.use('/api/chat', chatRoutes(app));
 server.use('/api/intents', intentRoutes(app));
 server.use('/api/compare', compareRoutes(app));
 server.use('/api/highlight', highlightRoutes(app));
+server.use('/api/slider', sliderRoutes(app));
 if (env.devMode) server.use('/api/dev', devRoutes(app));
 server.use('/api', (req, res) => res.status(404).json({ error: 'not_found' }));
 

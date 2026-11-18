@@ -50,6 +50,9 @@ export default {
     //   'highlight': the task starts from the starting draft. The participant highlights a passage, annotates
     //               it by voice and either has the AI change only what is needed (in place) or asks for a
     //               short question that challenges their standpoint. No main record or send button.
+    //   'slider'  : the task starts from its starting draft. Next to it a slot machine of sliders (decisions
+    //               between two poles, from `sliders` in data/tasks.json); sending writes a version from the
+    //               slider positions. Sliders are added or removed by voice. No main send button.
     //   'intents' : the task starts from its generic starting draft (`scaffold` in data/tasks.json; without
     //               one, the first instruction is sent as spoken). Each recording is split into intent
     //               cards that can be switched off or changed by voice; a send hands the AI only the
@@ -237,6 +240,36 @@ export default {
         'the question, do not suggest wording and do not praise. Return the question only.',
       maxOutputTokens: 1500, // edits can be long when a placeholder becomes a paragraph
       hedgeAfterSeconds: 0, // edits take longer than intents; no second request
+    },
+    // Prompts of the 'slider' mode. A version is written from the slider positions (no history); the
+    // same positions give the same text again (cached), so differences come from moving a slider only.
+    slider: {
+      writeInstruction:
+        'Write the full text that the outline below describes, for its reader. The author does not write ' +
+        'themselves; they only set the decisions listed under Decisions, each a position on a scale between ' +
+        'two opposite poles. Carry out every decision in proportion to its position: "strongly" means clearly ' +
+        'and throughout the text, "leaning" noticeably but moderately, "balanced" both poles in equal measure. ' +
+        'Where decisions pull in different directions, find wording that serves all of them. Use only facts ' +
+        'from the situation and the outline; do not invent figures, names or dates, and keep a placeholder in ' +
+        'square brackets where a fact is missing. Answer with the full text only, starting with its first line.',
+      anchorInstruction:
+        'Start from the previous version, which was written for the previous decisions. Keep it word for ' +
+        'word wherever the changed decisions do not call for a change, and rewrite only what they affect, so ' +
+        'that the difference between the two versions shows the effect of the change. Answer with the full ' +
+        'text only.',
+      voicePrompt:
+        'You manage the decision sliders of a writing tool. Each slider is one decision about a text: a scale ' +
+        'between two opposite poles. The author speaks about their text; the comment was transcribed ' +
+        'automatically and may contain recognition errors. Decide what they want. remove: they want to drop ' +
+        'one of the current sliders (they name it or clearly refer to it); return its id. create: they talk ' +
+        'about an aspect of the text they want to vary or weigh up (for example the tone, the length, how ' +
+        'much to concede); return theme, the decision in one to three words (for example "Tone"), and the two ' +
+        'poles a and b, short labels of two to five words for the two extreme choices on that decision: true ' +
+        'opposites, both reasonable choices (for example "Formal and reserved" and "Warm and personal"). Do ' +
+        'not create a slider that duplicates a current one. none: anything else. Use empty strings for the ' +
+        'fields that do not apply. Write the labels in the language of the comment.',
+      includeSituation: true, // the model sees the task's situation (facts); it never sees the task itself
+      maxSliders: 5,
     },
   },
 

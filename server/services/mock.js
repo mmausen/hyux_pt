@@ -36,9 +36,14 @@ export function createMockService({ config }) {
       if (purpose === 'systemCheck') return { text: config.systemCheck.testSentence };
       return { text: TRANSCRIPTS[t++ % TRANSCRIPTS.length] };
     },
-    async respond({ onDelta, signal }) {
+    async respond({ messages = [], onDelta, signal }) {
       await sleep(latency(), signal);
-      const text = RESPONSES[r++ % RESPONSES.length];
+      // Slider mode: a text that follows from the decisions, so moving a slider changes it visibly.
+      const input = String(messages.at(-1)?.content ?? '');
+      const decisions = (input.split('Decisions:\n')[1] ?? '').split('\n\n')[0].trim();
+      const text = decisions
+        ? `Dear [Name of the CFO],\n\n${decisions.split('\n').map((l) => `This proposal is ${l.replace(/^- /, '').replace(/ \(“.*?”\):/, ':')}.`).join('\n\n')}\n\nKind regards,\n[Your name]`
+        : RESPONSES[r++ % RESPONSES.length];
       if (onDelta) {
         for (const chunk of text.match(/\S+\s*/g) ?? []) {
           await sleep(25, signal);
@@ -76,6 +81,12 @@ export function createMockService({ config }) {
       }
       if (kind === 'challenge') {
         return { data: { question: CHALLENGES[c++ % CHALLENGES.length] }, usage: null };
+      }
+      // Slider mode: "remove"/"delete"/"drop" removes the last slider; anything else creates a Tone slider.
+      if (kind === 'sliderVoice') {
+        const last = context.sliders?.at(-1);
+        if (/\b(remove|delete|drop|get rid)\b/i.test(context.text ?? '') && last) return { data: { action: 'remove', id: last.id, theme: '', a: '', b: '' }, usage: null };
+        return { data: { action: 'create', id: '', theme: 'Tone', a: 'Formal and reserved', b: 'Warm and personal' }, usage: null };
       }
       const text = String(input.at(-1)?.content ?? '');
       const said = (label) => (text.split(`${label}:\n`)[1] ?? '').split('\n\n')[0].trim();
