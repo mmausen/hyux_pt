@@ -17,3 +17,6 @@ sessions/
 
 # OS files
 .DS_Store
+
+# Local study material (brief, task documents, screenshots). Not part of the repo.
+material/
