@@ -1,6 +1,6 @@
-// Voice mode canvas: task panel (top, fixed), conversation with the assistant (middle; each turn pairs the
-// AI response with the spoken instruction that produced it, older turns fade), and the controls (bottom:
-// record, send, finish, timer slot). Input is voice only: the draft is built from transcribed recordings
+// Voice mode canvas: task panel (top, fixed), the assistant's latest response (middle; earlier responses
+// are not shown, only the newest version, with how long ago it was updated) next to the current
+// instruction, and the controls (bottom: record, send, finish, timer slot). Input is voice only: the draft is built from transcribed recordings
 // and cannot be edited by typing.
 //
 // createCanvas(ctx, { round, task, live, conceal, sample, showFinish, onTurn }) → {
@@ -17,10 +17,6 @@ import { api } from '../../core/api.js';
 import { logEvent } from '../../core/logEvent.js';
 import { createRecorder } from '../../core/recorder/index.js';
 import { createConversation } from '../../core/conversation.js';
-
-// Opacity of a turn by age (0 = latest). The step from the latest to the one before is large on purpose,
-// so the current response stands out; hovering or focusing a turn shows it at full strength.
-const FADE = [1, 0.45, 0.35, 0.3];
 
 const timeOf = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '');
 
@@ -47,6 +43,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     onUpdate: () => render(),
     onDelta: (text) => renderDelta(text),
     onTurn(turn, info) {
+      updatedAt = Date.now();
       // The draft that produced this turn is done (also when the turn finished during a reload).
       if (draftText() === turn.transcript) { draft = []; saveDraft(); }
       onTurn?.(turn, info);
@@ -82,21 +79,45 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       h('div.vc-task__block', h('div.vc-task__label', t('canvas.taskLabel')), h('p.vc-task__text.vc-task__text--strong', task?.task ?? '')),
       details));
 
-  // ----- conversation -----
+  // ----- latest response -----
+  // Only the newest response is shown; each new one replaces it. The full conversation is still stored
+  // and logged (and shown in the conversation review, if that step is on).
   const noticeSlot = h('div.vc-notices');
-  const turnList = h('ol.vc-turns');
-  const scroller = h('div.vc-convo__scroll', { tabindex: '0', 'aria-label': t('canvas.conversationLabel') }, turnList);
+  const view = h('div.vc-turn');
+  const scroller = h('div.vc-convo__scroll', { tabindex: '0', 'aria-label': t('canvas.conversationLabel') }, view);
   const convo = h('section.vc-convo', { dataset: { region: 'output' } }, noticeSlot, scroller);
 
   const agentAvatar = () => h('span.fh-agent-avatar.fh-agent-avatar--xs', { 'aria-hidden': 'true' }, icon('ai'));
   const busy = (text) => h('div.fh-msg-agent__thinking', h('span.fh-busy', { 'aria-hidden': 'true' }, h('i'), h('i'), h('i')), text);
 
+  // When the shown response was last updated, in browser time (a finished turn's respondedAt is server
+  // time, so it is only used for a response that was already there when the page loaded).
+  const latestDone = () => conv.turns[conv.turns.length - 1] ?? null;
+  let updatedAt = (() => {
+    const at = Date.parse(latestDone()?.respondedAt ?? '');
+    return Number.isFinite(at) ? Math.min(at, Date.now()) : Date.now();
+  })();
+  const updatedText = h('span');
+  const updatedLabel = h('span.vc-updated', icon('history'), updatedText);
+  function renderUpdated() {
+    const s = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+    const text = s < 5 ? t('canvas.updatedNow')
+      : s < 60 ? t('canvas.updatedSeconds', { n: s })
+      : s < 3600 ? t('canvas.updatedMinutes', { n: Math.floor(s / 60) })
+      : t('canvas.updatedHours', { n: Math.floor(s / 3600) });
+    if (updatedText.textContent !== text) updatedText.textContent = text;
+    updatedLabel.title = t('canvas.updatedAt', { time: timeOf(new Date(updatedAt).toISOString()) });
+  }
+  const updatedTicker = setInterval(renderUpdated, 1000);
+
   function responseBlock(turn, { streaming = false } = {}) {
     const body = h('div.fh-msg-agent__body');
     if (streaming && !turn.response) body.append(busy(t('canvas.working')));
     else body.append(h('p.vc-response', turn.response));
+    if (!streaming) renderUpdated();
     return h('div.fh-msg-agent.vc-turn__response', agentAvatar(), h('div.vc-turn__agent',
-      h('div.vc-turn__meta', h('span.vc-turn__name', assistant), turn.n ? h('span', t('canvas.turnLabel', { n: turn.n })) : null),
+      h('div.vc-turn__meta', h('span.vc-turn__name', assistant), turn.n ? h('span', t('canvas.versionLabel', { n: turn.n })) : null,
+        streaming ? null : updatedLabel),
       body));
   }
 
@@ -131,33 +152,29 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     return box;
   }
 
+  // Left: the response being written, else the latest one. Right: the instruction being answered while
+  // the assistant writes, else the instruction being recorded for the next version.
+  let shownKey = null;
   function render() {
     if (destroyed) return;
-    clear(turnList);
-    const { turns, inflight } = conv;
-    const doneCount = turns.length;
-    turns.forEach((turn, i) => {
-      const age = doneCount - 1 - i + (inflight ? 1 : 0);
-      turnList.append(h('li.vc-turn', { style: `--vc-opacity:${FADE[Math.min(age, FADE.length - 1)]}`, dataset: { age: String(age) } },
-        responseBlock(turn), instructionBlock(turn)));
-    });
-    if (inflight) {
-      turnList.append(h('li.vc-turn.vc-turn--current', responseBlock(inflight, { streaming: true }), instructionBlock(inflight)));
-    } else {
-      const placeholder = doneCount === 0
-        ? h('div.vc-turn__response.vc-placeholder', agentAvatar(), h('p', t('canvas.responsePlaceholder')))
-        : h('div.vc-turn__response');
-      const errorBox = conv.error ? h('div.vc-chat-error', messageStrip('error', t(`canvas.errors.${conv.error}`))) : null;
-      turnList.append(h('li.vc-turn.vc-turn--current', h('div.vc-turn__left', placeholder, errorBox), draftBlock()));
-    }
+    const { inflight } = conv;
+    const latest = latestDone();
+    const errorBox = conv.error ? h('div.vc-chat-error', messageStrip('error', t(`canvas.errors.${conv.error}`))) : null;
+    let left;
+    if (inflight) left = responseBlock(inflight, { streaming: true });
+    else if (latest) left = responseBlock(latest);
+    else left = h('div.vc-turn__response.vc-placeholder', agentAvatar(), h('p', t('canvas.responsePlaceholder')));
+    clear(view).append(h('div.vc-turn__left', left, inflight ? null : errorBox), inflight ? instructionBlock(inflight) : draftBlock());
+    // A new response starts at the top; a re-render of the same one keeps the reading position.
+    const key = inflight ? `w${inflight.n}` : latest ? `d${latest.n}` : 'none';
+    if (key !== shownKey && !(key === `d${latest?.n}` && shownKey === `w${latest?.n}`)) scroller.scrollTop = 0;
+    shownKey = key;
     renderControls();
-    scroller.scrollTop = scroller.scrollHeight;
   }
 
-  // Streaming updates only touch the response text, not the whole list.
+  // Streaming updates only touch the response text, not the whole view.
   function renderDelta(text) {
-    const current = turnList.lastElementChild;
-    const body = current?.querySelector('.fh-msg-agent__body');
+    const body = view.querySelector('.fh-msg-agent__body');
     if (!body) return render();
     const p = body.querySelector('.vc-response');
     if (p) p.textContent = text;
@@ -308,6 +325,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     },
     destroy() {
       destroyed = true;
+      clearInterval(updatedTicker);
       recorder?.destroy();
       conv.destroy();
     },
