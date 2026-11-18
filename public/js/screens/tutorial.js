@@ -33,10 +33,12 @@ export default function create() {
           logEvent('tutorial.completed', { practice: true });
           ctx.flow.next();
         } }, t('tutorial.practice.continue'));
-        const banner = h('div.app-practice', messageStrip('information', t('tutorial.practice.intro')), continueBtn);
+        // A mode can bring its own practice task and intro (tutorial.practice.<mode>).
+        const practice = raw(`tutorial.practice.${mode.name}`) ?? {};
+        const banner = h('div.app-practice', messageStrip('information', practice.intro ?? t('tutorial.practice.intro')), continueBtn);
         canvas = mode.createCanvas(ctx, {
           round: PRACTICE_ROUND,
-          task: raw('tutorial.practice.task'),
+          task: practice.task ?? raw('tutorial.practice.task'),
           live: true,
           showFinish: false,
           onTurn(turn) {
@@ -50,7 +52,7 @@ export default function create() {
         canvas.noticeSlot.append(banner);
         host.append(canvas.el);
         // A practice turn that already finished before a reload counts.
-        if ((session.data.rounds?.[String(PRACTICE_ROUND)]?.turns ?? []).some((x) => x.status === 'done')) {
+        if ((session.data.rounds?.[String(PRACTICE_ROUND)]?.turns ?? []).some((x) => x.status === 'done' && x.kind !== 'scaffold')) {
           clear(banner).append(messageStrip('success', t('tutorial.practice.done')), continueBtn);
           continueBtn.disabled = false;
         }
@@ -65,7 +67,7 @@ export default function create() {
         round: PRACTICE_ROUND,
         task: sample.task,
         live: false,
-        sample: { turns: sample.turns.map((x) => ({ ...x, sentAt: now, respondedAt: now, status: 'done' })), draft: sample.draft, intents: sample.intents ?? [] },
+        sample: { turns: sample.turns.map((x) => ({ ...x, sentAt: now, respondedAt: now, status: 'done' })), draft: sample.draft, intents: sample.intents ?? [], scaffold: sample.scaffold ?? null },
       });
       host.append(canvas.el);
 

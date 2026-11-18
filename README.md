@@ -77,7 +77,7 @@ post:  end
 | **systemCheck** | Microphone permission, then a level meter. The participant reads the test sentence aloud, the recording is transcribed, and one short LLM call is made. Each check can be retried. After `retriesBeforeContact` failed retries, a contact text appears. |
 | **tutorial** | A guided tour over a sample canvas that highlights one area at a time. Then, if `tutorial.practiceTurn` is on, one real instruction is sent to the assistant. |
 | **briefing** | A dialog over the canvas shows the full scenario (situation and task) and the recommended time limit, so reading does not count toward task time. The task text behind it is hidden. **Start Task** starts the timer. |
-| **task** | The main canvas of the session's [interaction mode](#interaction-modes). The task panel shows the title and the task; **Show Situation** expands the situation (and any materials) again. Only the assistant's latest response is shown (each new one replaces it), with how long ago it was updated. Earlier responses stay stored and logged. The participant keeps going until they select **Finish Task** or time runs out. |
+| **task** | The main canvas of the session's [interaction mode](#interaction-modes). The task panel shows the title and the task; the situation (and any materials) is shown next to it and can be collapsed with **Hide Situation**. Only the assistant's latest response is shown (each new one replaces it), with how long ago it was updated. Earlier responses stay stored and logged. The participant keeps going until they select **Finish Task** or time runs out. |
 | **survey** | The questionnaire about the task, either built in or a link to an external tool. |
 | **interview** | "Conversation Review": a read-only view of the task and every turn with timestamps, to look at together with the interviewer. Off by default. |
 | **end** | Marks the session complete and shows the completion code, if one is set. |
@@ -100,7 +100,7 @@ Each session has one interaction mode, set from `interaction.mode` in `config.js
 
 **`intents`.** The participant thinks aloud, and what they say becomes intents: short change requests for the draft.
 
-1. **First draft.** The first instruction works as in the voice mode: recordings build it, **Send Instruction** sends it as spoken, and the response is the first draft.
+1. **Starting draft.** Every task starts from the same generic starting draft, the task's `scaffold` in `data/tasks.json`: a plain outline of the deliverable with placeholders in square brackets, without any personal flavour or strategic choice. It is shown as **Starting Draft** (no AI call; the server stores it as turn 1 with `kind: 'scaffold'`), and the first AI response is Version 1. The practice round's starting draft is `tutorial.practice.intents.task.scaffold` in the strings file. A task without a `scaffold` starts as in the voice mode instead: recordings build the first instruction, **Send Instruction** sends it as spoken, and the response is the first draft.
 2. **Intent cards.** From then on, each recording is transcribed and the LLM splits it into one or more intents (`ai.intents.extractPrompt`, with the latest draft as context). Each intent becomes a card next to the draft, newest first. A card shows the intent, a tag (**New** = not sent yet, **In Version n** = last sent in that version, **Changed** = changed by voice since it was last sent), an **On/Off** switch, and a **Hold to Change** button. Holding it records an annotation; on release it is transcribed and the LLM rewrites the intent (`ai.intents.annotatePrompt`).
 3. **Send Intents** hands the model only the intents that are on plus the latest draft (`ai.intents.reviseInstruction`), not the history. The response is the next version. The cards stay, so intents that stay on are sent again with every version; new recordings add new cards.
 
@@ -176,7 +176,7 @@ Participants see time only as a progress bar under the controls, with no countdo
 |---|---|
 | `assistantName` | Name shown for the assistant. Use a job-based name, not a human name. |
 | `model` | OpenAI model, called through the Responses API. |
-| `systemPrompt` | Instructions for the model. **The model never sees the task.** It sees only this prompt, the earlier turns (if `sendHistory`) and the new instruction. |
+| `systemPrompt` | Instructions for the model. **The model never sees the task or the situation.** It sees only this prompt, the earlier turns (if `sendHistory`) and the new instruction; in the intents mode, the starting draft (`scaffold`) as the first current draft. |
 | `temperature` | `null` = not sent. Some models (for example `gpt-6.2-sol`) don't accept it. |
 | `reasoningEffort` | `null` = not sent. Otherwise `'low'`, `'medium'`, `'high'`, `'xhigh'` or `'max'`. Lower effort gives faster responses. |
 | `maxOutputTokens` | Upper limit for one response. |
@@ -244,6 +244,7 @@ Tasks are in `data/tasks.json`:
   "situation": "Background the participant needs: who, what happened, what they know.",
   "task": "The instruction: what the participant should get the assistant to produce.",
   "briefing": "Short text shown before the task starts (may be empty).",
+  "scaffold": "Generic starting draft for the intents mode: an outline with [placeholders], no choices made.",
   "timeLimitMinutes": 6,
   "materials": [
     { "title": "Booth Notes", "body": "Text. Line breaks are kept." }
@@ -251,8 +252,8 @@ Tasks are in `data/tasks.json`:
 }
 ```
 
-- `id`, `title`, `situation`, `task` and `timeLimitMinutes` are required. `briefing` may be an empty string. `materials` is optional.
-- The briefing shows `situation` and `task` in full. During the task only `title` and `task` are visible; the situation and any materials appear behind **Show Situation**.
+- `id`, `title`, `situation`, `task` and `timeLimitMinutes` are required. `briefing` may be an empty string. `materials` and `scaffold` are optional. `scaffold` is only used by the intents mode, and it is the one part of the task the model sees (as the first current draft).
+- The briefing shows `situation` and `task` in full. During the task the situation and any materials are shown next to the task; **Hide Situation** collapses them.
 - Use a blank line (`\n\n`) in `situation` to separate paragraphs. Line breaks are kept.
 - The layout is checked for a situation of about 120 words and a task of about 40 words, at 1024×768 and larger. Much longer texts still work but scroll.
 - `placeholderFields` (optional) is only a note for authors. It marks fields that still hold generated placeholder text.
@@ -326,7 +327,7 @@ Options:
 A mode then only adds its input and its layout. It marks its own work with `conv.setBusy(key, on)`, so the task end waits for it; the voice mode does this for transcription. `conv.send(text, logPayload, body)` can pass extra fields to `/api/chat` (the intents mode sends `{ intentIds }`).
 
 **Shared canvas parts** in `public/js/core/canvas/`, used by both modes:
-- `taskPanel.js`: the task panel with Show Situation.
+- `taskPanel.js`: the task panel with Hide/Show Situation (open by default).
 - `latestResponse.js`: the latest response with "Version n" and "Updated … ago".
 - `controls.js`: the bar with record button, level meter, send, finish and the timer slot.
 - `voiceInput.js`: one record button from recording to transcript (`onText`), with logging and busy marking. A mode can have several (the intents mode has one per card, with `keyboard: 'focus'` so Space only works on the focused button).
@@ -407,7 +408,7 @@ Events (`server.*` and `session.*` come from the server; all others come from th
 | Timer | `timer.warning`, `timer.limit`, `timer.graceEnd` |
 | Recording | `recording.start`, `recording.stop` (duration, reason, size, format, peak level), `recording.error`. Intents mode: `target: 'instruction'` (first instruction), `'intents'` (new intents) or `'intent'` with `intentId` (a card's annotation); the same fields are on `transcript.*`. |
 | Transcription | `transcript.received` (length, latency), `transcript.empty`, `transcript.failed`, `draft.cleared` (the discarded text), `server.transcribe` (text, latency, size, format, audio file if stored) |
-| Intents | `intents.extracted` (count, IDs, latency), `intents.extractFailed`, `intent.toggled` (ID, on/off, number on), `intent.toggleFailed`, `intent.annotated` (ID, latency), `intent.annotateFailed`, `server.intents.extracted` (**transcript and intent texts**), `server.intent.annotated` (**annotation, intent before and after**) |
+| Intents | `scaffold.shown` (chars), `scaffold.failed`, `server.scaffold.shown` (**starting draft text**), `intents.extracted` (count, IDs, latency), `intents.extractFailed`, `intent.toggled` (ID, on/off, number on), `intent.toggleFailed`, `intent.annotated` (ID, latency), `intent.annotateFailed`, `server.intents.extracted` (**transcript and intent texts**), `server.intent.annotated` (**annotation, intent before and after**) |
 | AI | `ai.sent` (length; intents mode: `step: 'first'` or `'intents'` with the intent IDs sent and the number switched off), `ai.received` (latency, first token; `resumed: true` if the response finished during a reload), `ai.failed`, `server.ai.request` (instruction, model, history length; intents mode: the intents sent), `server.ai.response` (**response text**, latency, token usage) |
 | Questionnaire | `survey.submitted` (answers), `survey.externalOpened`, `survey.externalDone` |
 | End | `study.completed` |

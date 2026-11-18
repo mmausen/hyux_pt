@@ -1,8 +1,9 @@
-// Intents mode canvas. The participant still thinks aloud, but after the first draft their words become
-// intent cards that they can switch on and off and change by voice.
+// Intents mode canvas. The participant still thinks aloud, but their words become intent cards that they
+// can switch on and off and change by voice.
 //
-//   Step 1 (no draft yet): like the voice mode. Recordings build an instruction, which is sent as spoken
-//   and produces the first draft.
+//   Start: the task's generic starting draft (task.scaffold; the server stores it as turn 1, kind
+//   'scaffold', via /api/intents/start). A task without one starts like the voice mode instead:
+//   recordings build an instruction, which is sent as spoken and produces the first draft.
 //   From then on: each recording is transcribed and split by the LLM into one or more intents, shown as
 //   cards next to the draft (newest first). A card has a short description, a switch (on/off) and a
 //   hold-to-change button; an annotation is transcribed and the LLM rewrites the intent on release.
@@ -40,6 +41,8 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   let locked = !live;
   let destroyed = false;
   const serverIntents = () => session.data?.rounds?.[String(round)]?.intents ?? [];
+  let starting = false; // loading the starting draft
+  let startError = false;
   let intents = sample ? (sample.intents ?? []).map((x, i) => ({ id: `s${i + 1}`, active: true, annotations: [], sentIn: [], ...x })) : [...serverIntents()];
   const cards = new Map(); // id → card component
 
@@ -61,7 +64,8 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   const conv = createConversation(ctx, {
     round,
     live,
-    sample: sample?.turns ?? null,
+    // The tour shows the starting draft when the sample has one.
+    sample: sample ? (sample.scaffold ? [{ n: 1, kind: 'scaffold', transcript: '', response: sample.scaffold, status: 'done', sentAt: sample.turns?.[0]?.sentAt, respondedAt: sample.turns?.[0]?.respondedAt }] : sample.turns ?? []) : null,
     onUpdate: () => render(),
     onDelta: (text) => { if (!response.delta(text)) render(); },
     onTurn(turn, info) {
@@ -82,7 +86,12 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   const scroller = h('div.vc-convo__scroll', { tabindex: '0', 'aria-label': t('canvas.conversationLabel') }, left);
   const side = h('div.ic-side');
   const convo = h('section.vc-convo', { dataset: { region: 'output' } }, noticeSlot, h('div.ic-layout', scroller, side));
-  const response = createLatestResponse({ assistant: config.ai.assistantName, scroller, latest: conv.turns.at(-1) });
+  // Versions are counted from the first AI response; the starting draft has its own label.
+  const versionOf = (n) => (conv.turns[0]?.kind === 'scaffold' ? n - 1 : n);
+  const response = createLatestResponse({
+    assistant: config.ai.assistantName, scroller, latest: conv.turns.at(-1),
+    label: (turn) => (turn.kind === 'scaffold' ? t('canvas.scaffoldLabel') : turn.n ? t('canvas.versionLabel', { n: versionOf(turn.n) }) : null),
+  });
   const controls = createControls(ctx, { showFinish });
   const { recButton, sendBtn, finishBtn, timerSlot } = controls;
   const canvasApi = { onFinishRequest: null };
@@ -228,7 +237,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     clear(tags);
     if (!intent.sentIn?.length) tags.append(h('span.fh-tag.fh-tag--information', t('intents.tagNew')));
     else if (changed) tags.append(h('span.fh-tag.fh-tag--warning', t('intents.tagChanged')));
-    else tags.append(h('span.fh-tag', t('intents.tagSent', { n: intent.sentIn.at(-1) })));
+    else tags.append(h('span.fh-tag', t('intents.tagSent', { n: versionOf(intent.sentIn.at(-1)) })));
 
     toggle.checked = Boolean(intent.active);
     toggle.disabled = locked || inflight;
@@ -288,6 +297,12 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     if (destroyed) return;
     const { inflight } = conv;
     const latest = conv.turns.at(-1);
+    if (starting || startError) {
+      clear(left).append(h('div.vc-turn__left', starting ? busy(t('canvas.scaffoldLoading')) : errorStrip({ key: 'scaffold', retry: start })));
+      clear(side);
+      renderControls();
+      return;
+    }
     clear(left).append(response.render({ inflight, latest, error: conv.error }));
     // Right side: before the first draft the instruction (being recorded or being answered); after it,
     // the intent cards.
@@ -302,13 +317,13 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   function renderControls() {
     const inflight = Boolean(conv.inflight);
     const working = transcribing || extracting > 0 || cardsBusy();
-    const canRecord = !locked && !transcribing && !inflight && !anyRecordingOtherThanMain();
+    const canRecord = !locked && !transcribing && !inflight && !starting && !startError && !anyRecordingOtherThanMain();
     if (input) {
       if (input.recording) recButton.disabled = locked;
       else input.setEnabled(canRecord);
     } else recButton.disabled = true;
     const ready = hasDraft() ? activeIntents().length > 0 : Boolean(draftText());
-    sendBtn.disabled = locked || !ready || working || inflight || anyRecording();
+    sendBtn.disabled = locked || starting || !ready || working || inflight || anyRecording();
     finishBtn.disabled = locked;
   }
   const anyRecordingOtherThanMain = () => [...cards.values()].some((c) => c.input?.recording);
@@ -394,9 +409,34 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   }
   sendBtn.addEventListener('click', send);
 
+  // ----- starting draft -----
+  async function start() {
+    starting = true;
+    startError = false;
+    conv.setBusy('scaffold', true);
+    render();
+    try {
+      const res = await api.intents.start(round);
+      if (destroyed) return;
+      if (res.turn) {
+        conv.adopt(res.turn);
+        logEvent('scaffold.shown', { chars: res.turn.response.length });
+      }
+    } catch (e) {
+      if (destroyed) return;
+      startError = true;
+      logEvent('scaffold.failed', { error: e.code ?? e.name });
+    } finally {
+      starting = false;
+      conv.setBusy('scaffold', false);
+      if (!destroyed) render();
+    }
+  }
+
   // ----- assemble -----
   const el = h('div.vc.ic', { class: live ? '' : 'vc--static' }, taskPanel, convo, controls.el);
   render();
+  if (live && task?.scaffold && !conv.turns.length && !conv.inflight) start();
 
   return Object.assign(canvasApi, {
     el,

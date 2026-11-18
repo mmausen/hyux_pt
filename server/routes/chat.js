@@ -49,7 +49,8 @@ export function chatRoutes(app) {
       input = `${config.ai.intents.reviseInstruction}\n\nIntents:\n${text}\n\nCurrent draft:\n${draft}`;
     } else {
       history = config.ai.sendHistory
-        ? roundData.turns.filter((t) => t.status === 'done').flatMap((t) => [
+        // A starting draft (intents mode) has no instruction; the voice mode leaves it out.
+        ? roundData.turns.filter((t) => t.status === 'done' && t.kind !== 'scaffold').flatMap((t) => [
           { role: 'user', content: t.transcript },
           { role: 'assistant', content: t.response },
         ])

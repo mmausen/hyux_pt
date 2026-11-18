@@ -44,9 +44,10 @@ export default {
     // Default interaction mode for new sessions (a folder in public/js/modes/). In dev mode the dev panel
     // can switch the current session.
     //   'voice'   : spoken instructions build the instruction; each send goes to the AI with the history.
-    //   'intents' : the first instruction is sent as spoken; after that, each recording is split into
-    //               intent cards that can be switched off or changed by voice; a send hands the AI only
-    //               the active intents and the latest draft.
+    //   'intents' : the task starts from its generic starting draft (`scaffold` in data/tasks.json; without
+    //               one, the first instruction is sent as spoken). Each recording is split into intent
+    //               cards that can be switched off or changed by voice; a send hands the AI only the
+    //               active intents and the latest draft.
     mode: 'intents',
     recordingMode: 'pushToTalk', // 'pushToTalk' (hold button or Space) | 'toggle' (click to start, click to stop)
     maxRecordingSeconds: 60,
@@ -94,7 +95,9 @@ export default {
         'annotation replaces the intent, return the new one; if it adds a detail, merge it.',
       reviseInstruction:
         'Revise the current draft below so that it follows every intent in the list. Keep everything ' +
-        'the intents do not ask to change. Answer with the full revised draft only.',
+        'the intents do not ask to change. The draft may contain placeholders in square brackets: fill ' +
+        'one only when the intents give what it needs, otherwise keep it as it is. Answer with the full ' +
+        'revised draft only.',
       maxOutputTokens: 600, // for extracting and annotating intents
     },
   },

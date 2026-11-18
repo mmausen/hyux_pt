@@ -132,6 +132,8 @@ export default {
     recordingMax: 'Recording stopped after {seconds} seconds, the maximum length.',
     sentAt: 'Sent at {time}',
     versionLabel: 'Version {n}',
+    scaffoldLabel: 'Starting Draft', // intents mode: the generic draft every participant starts from
+    scaffoldLoading: 'Loading the starting draft',
     updatedNow: 'Updated just now',
     updatedSeconds: 'Updated {n} s ago',
     updatedMinutes: 'Updated {n} min ago',
@@ -142,6 +144,7 @@ export default {
       tooShort: 'The recording was too short. Hold the button while you speak.',
       empty: 'No speech was recognized in the last recording. Try again.',
       chat: 'The assistant could not respond. Your instruction is kept. Try again.',
+      scaffold: 'The starting draft could not be loaded. Try again.',
       intentsExtract: 'Your recording could not be turned into intents. Try again.',
       intentAnnotate: 'The intent could not be changed. Try again.',
       intentToggle: 'The intent could not be switched. Try again.',
@@ -195,7 +198,7 @@ export default {
     startPractice: 'Try It Out',
     finish: 'Finish Tutorial',
     voice: {
-      task: { title: 'Your Task', text: 'Your task is always shown at the top. Before each task you read its situation; during the task, select Show Situation to read it again.' },
+      task: { title: 'Your Task', text: 'Your task and its situation are always shown at the top. Select Hide Situation if you need more room for your work.' },
       recordPushToTalk: { title: 'Record an Instruction', text: 'Hold this button, or the Space key, while you speak. Release it when you are done. You can record several times; each recording is added to your instruction.' },
       recordToggle: { title: 'Record an Instruction', text: 'Select this button to start recording and select it again when you are done. You can record several times; each recording is added to your instruction.' },
       transcript: { title: 'Check Your Instruction', text: 'Your recording is converted to text here. You cannot type. If something went wrong, select Clear and record again.' },
@@ -205,10 +208,10 @@ export default {
       finish: { title: 'Finish the Task', text: 'Select Finish Task when you are happy with the result. You can finish at any time, also before the time limit.' },
     },
     intents: {
-      task: { title: 'Your Task', text: 'Your task is always shown at the top. Before each task you read its situation; during the task, select Show Situation to read it again.' },
-      recordPushToTalk: { title: 'Speak Your Thoughts', text: 'Hold this button, or the Space key, while you speak. Your first instruction is sent as you said it and gives a first draft. After that, everything you say becomes intents: short change requests for the draft.' },
-      recordToggle: { title: 'Speak Your Thoughts', text: 'Select this button to start recording and select it again when you are done. Your first instruction is sent as you said it and gives a first draft. After that, everything you say becomes intents: short change requests for the draft.' },
-      output: { title: 'Read the Draft', text: 'The assistant’s latest draft appears here. Each new version replaces the previous one, and the time next to it shows when it was last updated.' },
+      task: { title: 'Your Task', text: 'Your task and its situation are always shown at the top. Select Hide Situation if you need more room for your work.' },
+      recordPushToTalk: { title: 'Speak Your Thoughts', text: 'Hold this button, or the Space key, while you say what you want to change in the draft. What you say becomes intents: short change requests for the draft.' },
+      recordToggle: { title: 'Speak Your Thoughts', text: 'Select this button to start recording, say what you want to change in the draft and select it again when you are done. What you say becomes intents: short change requests for the draft.' },
+      output: { title: 'Read the Draft', text: 'Each task starts with a generic starting draft: a plain outline for you to shape. The assistant’s latest version appears here; each new version replaces the previous one, and the time next to it shows when it was last updated.' },
       intents: { title: 'Your Intents', text: 'Each thing you ask for appears here as a card, newest first. One recording can give several intents. “New” marks intents that have not been sent yet.' },
       cardPushToTalk: { title: 'Switch or Change an Intent', text: 'Switch an intent off to leave it out of the next version. To change an intent, hold its microphone button and say what to change; it is updated when you release the button.' },
       cardToggle: { title: 'Switch or Change an Intent', text: 'Switch an intent off to leave it out of the next version. To change an intent, select its microphone button, say what to change and select it again; it is updated then.' },
@@ -231,6 +234,8 @@ export default {
         },
       ],
       draft: 'Make it a bit more personal and mention the new delivery options.',
+      // Intents mode: the tour shows this starting draft instead of the turns above.
+      scaffold: 'Subject: [Subject line]\n\nDear [Name],\n\n[Thank the customer for the meeting.]\n\n[Refer to what was discussed and what you send with this email.]\n\n[Closing and next step.]\n\nBest regards,\n[Your name]',
       intents: [
         { text: 'Use a less formal greeting', active: false },
         { text: 'Make it a bit more personal' },
@@ -244,6 +249,16 @@ export default {
         situation: 'This is only practice. Nothing you do here counts toward the study.',
       },
       intro: 'Try it out: record one instruction and send it to the assistant.',
+      // Intents mode: the practice starts from a starting draft (read by the server too).
+      intents: {
+        task: {
+          title: 'Practice',
+          task: 'Say what you want to change in the starting draft, check the intents and send them to the assistant. For example: “Thank the customer for the meeting and mention the price list.”',
+          situation: 'This is only practice. Nothing you do here counts toward the study.',
+          scaffold: 'Subject: [Subject line]\n\nDear [Name],\n\n[Thank the customer for the meeting.]\n\n[Refer to what was discussed and what you send with this email.]\n\n[Closing and next step.]\n\nBest regards,\n[Your name]',
+        },
+        intro: 'Try it out: say what to change, then send the intents to the assistant.',
+      },
       done: 'Well done. You are ready for the tasks.',
       continue: 'Continue to the Tasks',
     },

@@ -2,13 +2,20 @@
 // session.rounds[round].intents = [{ id, text, active, transcript, createdAt, updatedAt, createdAfterTurn,
 // annotations: [{ text, before, after, at }], sentIn: [turn n] }].
 //
+//   POST /api/intents/start         { round }         the round starts from the task's starting draft
 //   POST /api/intents/extract       { round, text }   spoken comment → new intents (may be none)
 //   POST /api/intents/:id/annotate  { round, text }   spoken annotation → the intent, rewritten
 //   PUT  /api/intents/:id           { round, active } switch an intent on or off
 //
+// The starting draft (`scaffold` in data/tasks.json; for the practice round tutorial.practice.intents.task
+// in the strings file) is a generic outline of the task without any choices made. It is stored as turn 1
+// with kind 'scaffold' and becomes the first "current draft"; no LLM call is involved.
 // The LLM sees the prompt from config.ai.intents, the latest draft (to resolve "that part") and the
-// spoken text. Never the task. Sending the active intents to the AI is /api/chat with intentIds.
+// spoken text. Never the task or the situation (only what the starting draft says). Sending the active intents to the AI is /api/chat with intentIds.
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { Router } from 'express';
+import { ROOT } from '../config/load.js';
 import { requireSession, useMock } from '../middleware/session.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 
@@ -32,8 +39,13 @@ const ANNOTATE_SCHEMA = {
 export const latestDraft = (roundData) => [...(roundData?.turns ?? [])].reverse().find((t) => t.status === 'done')?.response ?? '';
 
 export function intentRoutes(app) {
-  const { config, env, store, logger, ai, mock } = app;
+  const { config, env, store, logger, ai, mock, tasksById } = app;
   const r = Router();
+  // The practice round's starting draft lives in the strings file next to the practice task.
+  let practiceScaffold = '';
+  import(pathToFileURL(path.join(ROOT, 'content', `strings.${config.study.locale}.js`)).href)
+    .then((m) => { practiceScaffold = m.default?.tutorial?.practice?.intents?.task?.scaffold ?? ''; })
+    .catch(() => {});
   const limit = rateLimit({
     name: 'chat',
     windowMs: config.limits.rateLimit.windowSeconds * 1000,
@@ -62,6 +74,24 @@ export function intentRoutes(app) {
     log.write('server.error', { route, error, detail: e.message });
     res.status(502).json({ error });
   };
+
+  // Starts the round from the starting draft. Does nothing if the round already has turns (a reload, or
+  // the round was started in another mode) or the task has no starting draft.
+  r.post('/start', requireSession(store), async (req, res) => {
+    const p = parse(req, res, { needText: false });
+    if (!p) return;
+    const { round, key, roundData } = p;
+    const first = roundData.turns[0];
+    if (first) return res.json({ turn: first.kind === 'scaffold' ? first : null });
+    const scaffold = (round === 0 ? practiceScaffold : tasksById.get(roundData.taskId)?.scaffold ?? '').trim();
+    if (!scaffold) return res.json({ turn: null });
+    const now = new Date().toISOString();
+    const turn = { n: 1, kind: 'scaffold', transcript: '', response: scaffold, status: 'done', sentAt: now, respondedAt: now };
+    roundData.turns.push(turn);
+    await store.update(req.study, (s) => { s.rounds[key] = roundData; });
+    logger.forSession(req.study, round).write('server.scaffold.shown', { turn: 1, chars: scaffold.length, text: scaffold });
+    res.json({ turn });
+  });
 
   r.post('/extract', requireSession(store), limit, async (req, res) => {
     const p = parse(req, res);

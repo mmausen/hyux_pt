@@ -141,6 +141,7 @@ export function validateTasks(tasks) {
     const p = `data/tasks.json [${i}]${t?.id ? ` (${t.id})` : ''}`;
     for (const f of ['id', 'title', 'situation', 'task']) if (typeof t?.[f] !== 'string' || !t[f].trim()) errors.push(`${p}: '${f}' must be non-empty text`);
     if (typeof t?.briefing !== 'string') errors.push(`${p}: 'briefing' must be text (may be empty)`);
+    if (t?.scaffold !== undefined && typeof t.scaffold !== 'string') errors.push(`${p}: 'scaffold' must be text (may be empty)`);
     if (typeof t?.timeLimitMinutes !== 'number' || t.timeLimitMinutes <= 0) errors.push(`${p}: 'timeLimitMinutes' must be a positive number`);
     if (t?.materials !== undefined) {
       if (!Array.isArray(t.materials)) errors.push(`${p}: 'materials' must be a list`);

@@ -31,10 +31,10 @@ export default function create() {
 
       const turnCard = (turn) => h('li.fh-card.app-review__turn',
         h('div.app-review__head',
-          h('span.app-review__num', t('interview.turn', { n: turn.n })),
+          h('span.app-review__num', turn.kind === 'scaffold' ? t('canvas.scaffoldLabel') : t('interview.turn', { n: turn.n })),
           h('span.app-hint', when(turn.sentAt))),
         h('div.app-review__grid',
-          h('div',
+          turn.kind === 'scaffold' ? h('div') : h('div',
             h('div.vc-instruction__label', t('interview.instruction')),
             h('p.vc-instruction__text', turn.transcript)),
           h('div',

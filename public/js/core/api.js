@@ -54,6 +54,7 @@ export const api = {
   },
   // Intent cards of the intents mode (server/routes/intents.js).
   intents: {
+    start: (round) => request('POST', '/api/intents/start', { json: { round } }),
     extract: (round, text, signal) => request('POST', '/api/intents/extract', { json: { round, text }, signal }),
     annotate: (round, id, text, signal) => request('POST', `/api/intents/${encodeURIComponent(id)}/annotate`, { json: { round, text }, signal }),
     setActive: (round, id, active) => request('PUT', `/api/intents/${encodeURIComponent(id)}`, { json: { round, active } }),

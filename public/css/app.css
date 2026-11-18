@@ -130,7 +130,7 @@ body.fh-app { background: var(--sapBackgroundColor); }
 
 /* ---------- Timer ---------- */
 .app-timer { display: flex; align-items: center; gap: var(--sapContent_Space_Small); }
-.app-timer__bar { flex: 1; }
+.app-timer__bar { flex: 1; height: 0.75rem; border-radius: 0.375rem; } /* larger than the default fh-progress */
 .app-timer__bar--over > span { background: var(--sapNegativeElementColor); }
 
 /* ---------- Voice canvas ---------- */
@@ -215,7 +215,7 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .ic-card__status { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
 .ic-card__status .fh-msg-agent__thinking { font-size: var(--sapFontSmallSize); }
 
-.vc-controls { padding: var(--sapContent_Space_Small) 0; border-top: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); }
+.vc-controls { padding: var(--sapContent_Space_Small) 0 var(--sapContent_Space_Medium); border-top: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); }
 .vc-controls__row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sapContent_Space_Medium); }
 .vc-controls__side { display: flex; align-items: center; }
 .vc-controls__side--end { justify-content: flex-end; }

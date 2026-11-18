@@ -9,6 +9,7 @@
 //   conv.error            'chat' | 'timeout' | 'rateLimited' | 'pendingLost' | null
 //   await conv.send(text, logPayload, body)   → the stored turn, or null if it failed
 //                         body: extra request fields for /api/chat (intents mode: { intentIds })
+//   conv.adopt(turn)      add a turn the server made without the AI (intents mode: the starting draft)
 //   conv.setBusy(key, on) mode-specific work that must finish before the task ends (e.g. 'transcribe')
 //   conv.isBusy(), conv.whenIdle(), conv.clearError(), conv.destroy()
 //
@@ -126,6 +127,12 @@ export function createConversation(ctx, { round, live = true, sample = null, onU
     get error() { return error; },
     clearError() { error = null; },
     send,
+    adopt(turn) {
+      if (destroyed || turns.some((x) => x.n === turn.n)) return;
+      turns.push(turn);
+      remember(turn);
+      onUpdate();
+    },
     setBusy(key, on) {
       if (on) work.add(key);
       else work.delete(key);
