@@ -17,13 +17,6 @@ function browserFamily() {
   return 'other';
 }
 
-const words = (s) => s.toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}\s']/gu, ' ').split(/\s+/).filter(Boolean);
-export function wordOverlap(expected, actual) {
-  const want = words(expected);
-  const have = new Set(words(actual));
-  return want.length ? want.filter((w) => have.has(w)).length / want.length : 0;
-}
-
 export default function create() {
   let recorder = null;
   let aborter = null;
@@ -137,19 +130,16 @@ export default function create() {
       async function runStt() {
         set('stt', 'running');
         aborter = new AbortController();
-        const timeout = AbortSignal.timeout(cfg.transcribeTimeoutSeconds * 1000);
+        // A little longer than the server's own timeouts, so the server's error arrives first.
+        const timeout = AbortSignal.timeout((ctx.config.stt.timeoutSeconds + 5) * 1000);
         const started = performance.now();
         try {
           const res = await api.transcribe(lastBlob.blob, { purpose: 'systemCheck', filename: `systemcheck.${lastBlob.ext}`, signal: AbortSignal.any([aborter.signal, timeout]) });
           if (destroyed) return;
           const text = (res.text ?? '').trim();
-          const payload = { durationMs: Math.round(performance.now() - started), transcript: text, mock: res.mock };
+          // The recognized text itself is logged by the server (server.transcribe).
+          const payload = { durationMs: Math.round(performance.now() - started), chars: text.length, mock: res.mock };
           if (!text) return fail('stt', 'sttEmpty', { retry: recordAgain, payload });
-          if (cfg.fuzzyMatch.enabled) {
-            const score = wordOverlap(cfg.testSentence, text);
-            payload.matchScore = Math.round(score * 100) / 100;
-            if (score < cfg.fuzzyMatch.threshold) return fail('stt', 'sttMismatch', { retry: recordAgain, payload });
-          }
           logCheck('stt', 'success', payload);
           set('stt', 'success', { text });
           runLlm();
@@ -164,7 +154,7 @@ export default function create() {
       async function runLlm() {
         set('llm', 'running');
         aborter = new AbortController();
-        const timeout = AbortSignal.timeout(cfg.llmTimeoutSeconds * 1000);
+        const timeout = AbortSignal.timeout((ctx.config.ai.timeoutSeconds + 5) * 1000);
         const started = performance.now();
         try {
           const res = await api.health(AbortSignal.any([aborter.signal, timeout]));

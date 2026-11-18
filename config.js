@@ -70,8 +70,7 @@ export default {
     reasoningEffort: 'low', // null = not sent; otherwise 'low' | 'medium' | 'high' | 'xhigh' | 'max'
     maxOutputTokens: 1500,
     sendHistory: true, // include earlier turns of the current task
-    stream: true,
-    timeoutSeconds: 60,
+    timeoutSeconds: 60, // also used for the AI check in the system check
   },
 
   stt: {
@@ -84,10 +83,7 @@ export default {
   systemCheck: {
     testSentence: 'I would like to prepare a follow-up email for my customer.',
     maxRecordingSeconds: 15,
-    transcribeTimeoutSeconds: 30,
-    llmTimeoutSeconds: 30,
     retriesBeforeContact: 2, // after this many failed retries of a check, show the contact text
-    fuzzyMatch: { enabled: false, threshold: 0.6 }, // 0..1 word overlap with the test sentence
   },
 
   survey: {

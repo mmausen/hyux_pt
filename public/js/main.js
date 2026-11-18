@@ -116,13 +116,13 @@ async function main() {
     const step = flow.step;
     // The tutorial's practice turn is round 0 (as on the server), with its own start time.
     if (step?.screen === 'tutorial' && session.state.tutorial?.practice) {
-      return { round: 0, taskId: 'practice', taskStartedAt: session.roundState(0).taskStartedAt ?? null };
+      return { round: 0, taskId: 'practice', taskStartedAt: session.progress(0).taskStartedAt ?? null };
     }
     if (!step?.round) return { round: null, taskId: null, taskStartedAt: null };
     return {
       round: step.round,
       taskId: session.task(step.round)?.id ?? null,
-      taskStartedAt: session.roundState(step.round).taskStartedAt ?? null,
+      taskStartedAt: session.progress(step.round).taskStartedAt ?? null,
     };
   });
 

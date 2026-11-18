@@ -24,7 +24,7 @@ export default function create() {
         canvas?.destroy();
         clear(host);
         session.update({ tutorial: { ...(session.state.tutorial ?? {}), practice: true } });
-        if (!session.roundState(PRACTICE_ROUND).taskStartedAt) session.updateRound(PRACTICE_ROUND, { taskStartedAt: Date.now() }, { immediate: true });
+        if (!session.progress(PRACTICE_ROUND).taskStartedAt) session.updateProgress(PRACTICE_ROUND, { taskStartedAt: Date.now() }, { immediate: true });
         logEvent('tutorial.practiceStarted', { resumed });
         const continueBtn = h('button.fh-btn.fh-btn--emphasized', { type: 'button', disabled: true, onclick: () => {
           logEvent('tutorial.completed', { practice: true });

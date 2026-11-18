@@ -4,7 +4,6 @@
 
 export default {
   app: {
-    loading: 'Loading the study.',
     loadFailed: 'The study could not be loaded. Check your internet connection and reload the page.',
     roundIndicator: 'Task {round} of {rounds}',
     smallScreenTitle: 'Larger Screen Needed',
@@ -29,11 +28,9 @@ export default {
 
   common: {
     continue: 'Continue',
-    back: 'Back',
     next: 'Next',
     retry: 'Try Again',
     cancel: 'Cancel',
-    close: 'Close',
   },
 
   welcome: {
@@ -50,7 +47,6 @@ export default {
       rate_limited: 'Too many attempts. Wait one minute and try again.',
       network: 'The server could not be reached. Check your internet connection and try again.',
     },
-    unsupportedTitle: 'Browser Not Supported',
     unsupported: 'This browser cannot record audio for the study. Use the latest version of Chrome, Edge, Firefox or Safari.',
     insecure: 'Microphone access is blocked because the page is not loaded over a secure connection (https).',
     browserHint: 'For the best experience, use the latest version of Chrome or Edge.',
@@ -85,7 +81,6 @@ export default {
       tooShort: 'The recording was too short. Read the whole sentence while recording.',
       silent: 'No sound was detected. Check that the right microphone is selected and not muted, then speak a bit louder.',
       sttEmpty: 'No speech was recognized. Read the sentence clearly and try again.',
-      sttMismatch: 'The recognized text does not match the sentence well enough. Read the sentence clearly and try again.',
       sttFailed: 'Speech recognition is not available right now. Try again.',
       llmFailed: 'The AI assistant could not be reached. Try again.',
       timeout: 'The request took too long. Check your internet connection and try again.',

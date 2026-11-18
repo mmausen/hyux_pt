@@ -68,7 +68,7 @@ export function aiRoutes(app) {
   r.get('/health', requireSession(store), llmLimit, async (req, res) => {
     const service = useMock(req, env, 'llm') ? mock : ai;
     try {
-      const out = await service.health({ signal: AbortSignal.timeout(config.systemCheck.llmTimeoutSeconds * 1000) });
+      const out = await service.health({ signal: AbortSignal.timeout(config.ai.timeoutSeconds * 1000) });
       res.json({ ok: out.ok, mock: service === mock || undefined });
     } catch (e) {
       fail(req, res, 502, e.name === 'TimeoutError' ? 'llm_timeout' : 'llm_failed', e.message);

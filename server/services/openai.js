@@ -37,7 +37,7 @@ export function createOpenAiService({ config, env }) {
 
     // messages: [{ role: 'user' | 'assistant', content: string }]
     async respond({ messages, onDelta, signal }) {
-      const stream = Boolean(config.ai.stream && onDelta);
+      const stream = Boolean(onDelta);
       const res = await need().responses.create(requestParams(messages, { stream }), { signal });
       if (!stream) return { text: res.output_text ?? '', usage: res.usage ?? null };
       let text = '';

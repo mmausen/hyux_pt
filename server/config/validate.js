@@ -86,7 +86,7 @@ export function validateConfig(config, { tasks, modes, hasApiKey, devMode }) {
   if (get('ai.temperature') !== null) num('ai.temperature', { min: 0, max: 2 });
   if (get('ai.reasoningEffort') !== null) oneOf('ai.reasoningEffort', ['none', 'low', 'medium', 'high', 'xhigh', 'max']);
   num('ai.maxOutputTokens', { min: 16, max: 128000, int: true });
-  bool('ai.sendHistory'); bool('ai.stream');
+  bool('ai.sendHistory');
   num('ai.timeoutSeconds', { min: 5, max: 600 });
 
   // stt
@@ -101,11 +101,7 @@ export function validateConfig(config, { tasks, modes, hasApiKey, devMode }) {
   // system check
   str('systemCheck.testSentence');
   num('systemCheck.maxRecordingSeconds', { min: 3, max: 60 });
-  num('systemCheck.transcribeTimeoutSeconds', { min: 5, max: 300 });
-  num('systemCheck.llmTimeoutSeconds', { min: 5, max: 300 });
   num('systemCheck.retriesBeforeContact', { min: 0, max: 20, int: true });
-  bool('systemCheck.fuzzyMatch.enabled');
-  num('systemCheck.fuzzyMatch.threshold', { min: 0, max: 1 });
 
   // survey
   oneOf('survey.type', ['internal', 'external']);

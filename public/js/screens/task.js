@@ -21,15 +21,15 @@ export default function create() {
       const { round } = ctx.step;
       const task = ctx.session.task(round);
       const cfg = ctx.config.timer;
-      let rs = ctx.session.roundState(round);
+      let progress = ctx.session.progress(round);
       let ending = false;
       let finished = false;
 
-      if (rs.finishedAt) return ctx.flow.next();
-      if (!rs.taskStartedAt) {
+      if (progress.finishedAt) return ctx.flow.next();
+      if (!progress.taskStartedAt) {
         // No briefing in the flow (or skipped in dev mode): the task starts now.
-        ctx.session.updateRound(round, { taskId: task.id, taskStartedAt: Date.now() }, { immediate: true });
-        rs = ctx.session.roundState(round);
+        ctx.session.updateProgress(round, { taskId: task.id, taskStartedAt: Date.now() }, { immediate: true });
+        progress = ctx.session.progress(round);
         logEvent('task.started', { title: task.title, timeLimitMinutes: task.timeLimitMinutes, timerMode: cfg.mode, via: 'task' });
       }
 
@@ -43,7 +43,7 @@ export default function create() {
         finished = true;
         timer.stop();
         logEvent('task.finished', { reason, elapsedMs: Math.round(timer.elapsedMs), turns: (ctx.session.data.rounds?.[String(round)]?.turns ?? []).length });
-        await ctx.session.updateRound(round, { finishedAt: Date.now(), finishReason: reason }, { immediate: true });
+        await ctx.session.updateProgress(round, { finishedAt: Date.now(), finishReason: reason }, { immediate: true });
         if (!gone) ctx.flow.next();
       }
 
@@ -87,9 +87,9 @@ export default function create() {
 
       const bar = createTimerBar();
       canvas.timerSlot.append(bar.el);
-      const fired = [...(rs.timerEvents ?? [])];
+      const fired = [...(progress.timerEvents ?? [])];
       timer = createTimer({
-        startedAt: rs.taskStartedAt,
+        startedAt: progress.taskStartedAt,
         limitMs: task.timeLimitMinutes * 60_000,
         cfg,
         speed: ctx.dev?.timerSpeed ?? 1,
@@ -97,7 +97,7 @@ export default function create() {
         onTick: bar.update,
         onEvent(m, { late }) {
           fired.push(m.event);
-          ctx.session.updateRound(round, { timerEvents: [...fired] }, { immediate: true });
+          ctx.session.updateProgress(round, { timerEvents: [...fired] }, { immediate: true });
           logEvent(`timer.${m.event}`, { mode: cfg.mode, phase: m.phase, late });
           if (m.event === 'warning') notice('warning', 'task.warning');
           if (m.phase === 'overtime') notice('error', 'task.overtime');

@@ -167,8 +167,7 @@ Participants see time only as a progress bar under the controls, with no countdo
 | `reasoningEffort` | `null` = not sent. Otherwise `'low'`, `'medium'`, `'high'`, `'xhigh'` or `'max'`. Lower effort gives faster responses. |
 | `maxOutputTokens` | Upper limit for one response. |
 | `sendHistory` | `true`: the earlier turns of the current task are sent with each instruction. |
-| `stream` | `true`: the response appears while it is being written. |
-| `timeoutSeconds` | A response that takes longer fails with a retry option. |
+| `timeoutSeconds` | A response that takes longer fails with a retry option. Also the time limit for the AI check in the system check. Responses always stream: they appear while they are being written. |
 
 #### `stt` (speech-to-text)
 | Option | Meaning |
@@ -176,16 +175,14 @@ Participants see time only as a progress bar under the controls, with no countdo
 | `model` | OpenAI transcription model. |
 | `languages` | Expected languages, for example `['en']` or `['en', 'de']`. |
 | `prompt` | Optional vocabulary hint, such as product or customer names. |
-| `timeoutSeconds` | Server-side timeout for one transcription. |
+| `timeoutSeconds` | Server-side timeout for one transcription, in the tasks and in the system check. |
 
 #### `systemCheck`
 | Option | Meaning |
 |---|---|
 | `testSentence` | The sentence participants read aloud. |
 | `maxRecordingSeconds` | Recording limit for the test. |
-| `transcribeTimeoutSeconds`, `llmTimeoutSeconds` | Timeouts for the two checks. |
 | `retriesBeforeContact` | After this many failed retries, the screen shows the contact text from the strings file. |
-| `fuzzyMatch` | `{ enabled, threshold }`. If enabled, the transcript must share at least `threshold` (0–1) of its words with the test sentence. Off by default: any non-empty transcript passes. |
 
 #### `survey`
 | Option | Meaning |
@@ -299,7 +296,16 @@ Options:
 - `sample` provides `{ turns, draft }` for the tutorial.
 - `onTurn(turn)` is called after each finished AI response.
 
-Use `ctx.api.transcribe`, `sendChat` from `core/aiClient.js`, `createRecorder` from `core/recorder/`, and `logEvent`. That way the server routes, logging and mock mode work unchanged.
+**Build the canvas on `core/conversation.js`.** It holds everything about talking to the assistant that doesn't depend on the input:
+- sending an instruction and streaming the response
+- the list of finished turns and the one being answered
+- picking up a response that was still being written before a reload
+- logging (`ai.sent`, `ai.received`, `ai.failed`)
+- busy and idle: `isBusy()` and `whenIdle()` can be passed straight through to the canvas API
+
+A mode then only adds its input and its layout. It marks its own work with `conv.setBusy(key, on)`, so the task end waits for it; the voice mode does this for transcription. See `public/js/modes/voice/canvas.js` for how the two fit together.
+
+Voice input uses `ctx.api.transcribe` and `createRecorder` from `core/recorder/`. Use `logEvent` for the mode's own events. That way the server routes, logging and mock mode work unchanged.
 
 **`tutorialSteps()`** returns `[{ region, titleKey, textKey }]`. Each region is the name passed to `getRegion`. The keys point to text in the strings file.
 
@@ -373,13 +379,13 @@ Events (`server.*` and `session.*` come from the server; all others come from th
 | Task | `task.started`, `task.finishRequested`, `task.finishCancelled`, `task.finished` (reason, elapsed time, turns) |
 | Timer | `timer.warning`, `timer.limit`, `timer.graceEnd` |
 | Recording | `recording.start`, `recording.stop` (duration, reason, size, format, peak level), `recording.error` |
-| Transcription | `transcript.received` (text, latency), `transcript.empty`, `transcript.failed`, `draft.cleared` (the discarded text), `server.transcribe` (text, latency, size, format, audio file if stored) |
-| AI | `ai.sent` (instruction text), `ai.received` (latency, first token), `ai.failed`, `server.ai.request` (instruction, model, history length), `server.ai.response` (**response text**, latency, token usage) |
+| Transcription | `transcript.received` (length, latency), `transcript.empty`, `transcript.failed`, `draft.cleared` (the discarded text), `server.transcribe` (text, latency, size, format, audio file if stored) |
+| AI | `ai.sent` (length), `ai.received` (latency, first token; `resumed: true` if the response finished during a reload), `ai.failed`, `server.ai.request` (instruction, model, history length), `server.ai.response` (**response text**, latency, token usage) |
 | Questionnaire | `survey.submitted` (answers), `survey.externalOpened`, `survey.externalDone` |
 | End | `study.completed` |
 | Problems | `client.error` (uncaught errors, failed saves), `client.saveRecovered`, `client.smallScreen`, `server.error` (route, error code, detail) |
 
-The complete conversation of each round is also stored with the session in `sessions/<sessionId>.json` (`rounds[round].turns`). It includes the instruction, response, times, latency and token usage.
+Texts (transcripts, instructions, responses) are logged once, in the `server.*` events; the browser events carry lengths and timings. The complete conversation of each round is also stored with the session in `sessions/<sessionId>.json` (`rounds[round].turns`). It includes the instruction, response, times, latency and token usage.
 
 ---
 
@@ -432,7 +438,7 @@ server/
 public/
   index.html, css/app.css shell and prototype styles (only reads --sap… variables)
   js/main.js              bootstrap
-  js/core/                flow controller, session, API client, logEvent, timer, recorder, dialogs, coach marks
+  js/core/                flow controller, session, API client, conversation, logEvent, timer, recorder, dialogs, coach marks
   js/screens/             one module per screen: { mount(container, ctx), unmount() }
   js/modes/voice/         voice interaction mode: canvas + tutorial steps
 dev-client/devPanel.js    dev panel (served only in dev mode)

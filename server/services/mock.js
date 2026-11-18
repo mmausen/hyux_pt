@@ -30,7 +30,7 @@ export function createMockService({ config }) {
     async respond({ onDelta, signal }) {
       await sleep(latency(), signal);
       const text = RESPONSES[r++ % RESPONSES.length];
-      if (config.ai.stream && onDelta) {
+      if (onDelta) {
         for (const chunk of text.match(/\S+\s*/g) ?? []) {
           await sleep(25, signal);
           onDelta(chunk);

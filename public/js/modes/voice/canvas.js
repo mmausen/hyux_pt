@@ -8,12 +8,15 @@
 //   isBusy(), setLocked(bool), stopRecording(reason), whenIdle(), destroy()
 // }
 // live=false renders the same layout without input (briefing backdrop, tutorial). conceal hides the task text.
+//
+// The conversation itself (sending, streaming, resuming after a reload, busy/idle) is core/conversation.js;
+// this file adds the voice input (record → transcribe → draft) and the layout.
 import { h, icon, clear, messageStrip } from '../../core/dom.js';
 import { t } from '../../core/strings.js';
 import { api } from '../../core/api.js';
-import { sendChat } from '../../core/aiClient.js';
 import { logEvent } from '../../core/logEvent.js';
 import { createRecorder } from '../../core/recorder/index.js';
+import { createConversation } from '../../core/conversation.js';
 
 // Opacity of a turn by age (0 = latest). The step from the latest to the one before is large on purpose,
 // so the current response stands out; hovering or focusing a turn shows it at full strength.
@@ -27,24 +30,31 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   const assistant = config.ai.assistantName;
 
   // ----- state -----
-  const serverTurns = () => session.data?.rounds?.[String(round)]?.turns ?? [];
-  let turns = sample ? sample.turns : serverTurns().filter((x) => x.status === 'done');
-  let draft = sample ? (sample.draft ? [{ text: sample.draft }] : []) : [...(session.roundState(round).draft ?? [])];
-  let inflight = null; // { transcript, response, status: 'pending' }
+  // The draft is the instruction being built from one or more transcribed recordings.
+  let draft = sample ? (sample.draft ? [{ text: sample.draft }] : []) : [...(session.progress(round).draft ?? [])];
   let transcribing = false;
-  let finalizing = false; // recorder stopped by the app, audio not yet handed to transcription
   let transcriptError = null; // { key, retry }
-  let chatError = null; // { key }
   let locked = !live;
   let destroyed = false;
-  let aborter = null;
-  let pollTimer = null;
-  const idleWaiters = [];
 
   const draftText = () => draft.map((d) => d.text).join(' ').trim();
-  const saveDraft = () => live && session.updateRound(round, { draft }, { immediate: true });
-  const isIdle = () => !transcribing && !inflight && !finalizing;
-  const notifyIdle = () => { if (isIdle()) idleWaiters.splice(0).forEach((fn) => fn()); };
+  const saveDraft = () => live && session.updateProgress(round, { draft }, { immediate: true });
+
+  const conv = createConversation(ctx, {
+    round,
+    live,
+    sample: sample?.turns ?? null,
+    onUpdate: () => render(),
+    onDelta: (text) => renderDelta(text),
+    onTurn(turn, info) {
+      // The draft that produced this turn is done (also when the turn finished during a reload).
+      if (draftText() === turn.transcript) { draft = []; saveDraft(); }
+      onTurn?.(turn, info);
+    },
+  });
+  // Work the task end must wait for: transcription, and a recording the app stopped but not yet handed over.
+  const setTranscribing = (on) => { transcribing = on; conv.setBusy('transcribe', on); };
+  const setFinalizing = (on) => conv.setBusy('finalize', on);
 
   // ----- task panel -----
   const materials = Array.isArray(task?.materials) ? task.materials : [];
@@ -120,6 +130,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   function render() {
     if (destroyed) return;
     clear(turnList);
+    const { turns, inflight } = conv;
     const doneCount = turns.length;
     turns.forEach((turn, i) => {
       const age = doneCount - 1 - i + (inflight ? 1 : 0);
@@ -132,7 +143,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       const placeholder = doneCount === 0
         ? h('div.vc-turn__response.vc-placeholder', agentAvatar(), h('p', t('canvas.responsePlaceholder')))
         : h('div.vc-turn__response');
-      const errorBox = chatError ? h('div.vc-chat-error', messageStrip('error', t(`canvas.errors.${chatError.key}`))) : null;
+      const errorBox = conv.error ? h('div.vc-chat-error', messageStrip('error', t(`canvas.errors.${conv.error}`))) : null;
       turnList.append(h('li.vc-turn.vc-turn--current', h('div.vc-turn__left', placeholder, errorBox), draftBlock()));
     }
     renderControls();
@@ -140,13 +151,13 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   }
 
   // Streaming updates only touch the response text, not the whole list.
-  function renderDelta() {
+  function renderDelta(text) {
     const current = turnList.lastElementChild;
     const body = current?.querySelector('.fh-msg-agent__body');
     if (!body) return render();
     const p = body.querySelector('.vc-response');
-    if (p) p.textContent = inflight.response;
-    else clear(body).append(h('p.vc-response', inflight.response));
+    if (p) p.textContent = text;
+    else clear(body).append(h('p.vc-response', text));
     const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
     if (nearBottom) scroller.scrollTop = scroller.scrollHeight;
   }
@@ -171,6 +182,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   setRecIdleLabel();
 
   function renderControls() {
+    const inflight = conv.inflight;
     const canRecord = !locked && !transcribing && !inflight;
     if (recorder) {
       if (recorder.recording) recButton.disabled = locked;
@@ -193,9 +205,9 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   let recorder = null;
 
   async function transcribe(rec) {
-    transcribing = true;
+    setTranscribing(true);
     transcriptError = null;
-    chatError = null;
+    conv.clearError();
     render();
     const started = performance.now();
     try {
@@ -209,16 +221,16 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       } else {
         draft.push({ text, at: new Date().toISOString(), recordingMs: rec.durationMs });
         saveDraft();
-        logEvent('transcript.received', { text, recordingMs: rec.durationMs, latencyMs, reason: rec.reason, segment: draft.length, mock: res.mock });
+        // The transcript text itself is logged by the server (server.transcribe).
+        logEvent('transcript.received', { chars: text.length, recordingMs: rec.durationMs, latencyMs, reason: rec.reason, segment: draft.length, mock: res.mock });
       }
     } catch (e) {
       if (destroyed) return;
       logEvent('transcript.failed', { error: e.code ?? e.name, reason: rec.reason });
       transcriptError = { key: e.code === 'rate_limited' ? 'rateLimited' : 'transcribe', retry: () => transcribe(rec) };
     } finally {
-      transcribing = false;
+      setTranscribing(false);
       if (!destroyed) render();
-      notifyIdle();
     }
   }
 
@@ -227,7 +239,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       maxSeconds: config.interaction.maxRecordingSeconds,
       onStart() {
         transcriptError = null;
-        chatError = null;
+        conv.clearError();
         recLabel.textContent = t(ptt ? 'canvas.recordHold' : 'canvas.recordStop');
         recStatus.textContent = t('canvas.recordingStatus', { seconds: 0 });
         logEvent('recording.start', { mode: recorder.mode });
@@ -236,22 +248,20 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       onTick(s) { recStatus.textContent = t('canvas.recordingStatus', { seconds: Math.floor(s) }); },
       onLevel(level) { meterFill.style.width = `${Math.round(level * 100)}%`; },
       onStop(rec) {
-        finalizing = false;
         setRecIdleLabel();
         logEvent('recording.stop', { durationMs: rec.durationMs, reason: rec.reason, bytes: rec.blob.size, mimeType: rec.mimeType, peak: Math.round(rec.peak * 100) / 100 });
-        if (destroyed && rec.reason !== 'timeLimit') { notifyIdle(); return; }
+        if (destroyed && rec.reason !== 'timeLimit') return setFinalizing(false);
         if (rec.tooShort || !rec.blob.size) {
           transcriptError = { key: 'tooShort' };
           render();
-          notifyIdle();
-          return;
+          return setFinalizing(false);
         }
         if (rec.reason === 'maxLength') recStatus.textContent = t('canvas.recordingMax', { seconds: config.interaction.maxRecordingSeconds });
-        transcribe(rec);
+        transcribe(rec); // marks itself busy before the app's stop is released, so the task end keeps waiting
+        setFinalizing(false);
       },
       onError(err) {
-        finalizing = false;
-        notifyIdle();
+        setFinalizing(false);
         setRecIdleLabel();
         logEvent('recording.error', { error: err.kind ?? err.name });
         transcriptError = { key: 'mic' };
@@ -264,85 +274,13 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   // ----- send to AI -----
   async function send() {
     const text = draftText();
-    if (!text || locked || inflight || transcribing) return;
-    chatError = null;
-    inflight = { n: turns.length + 1, transcript: text, response: '', status: 'pending', sentAt: new Date().toISOString() };
-    render();
-    logEvent('ai.sent', { turn: inflight.n, text, chars: text.length, segments: draft.length });
-    aborter = new AbortController();
-    const started = performance.now();
-    let firstToken = null;
-    try {
-      const turn = await sendChat({
-        round,
-        text,
-        signal: aborter.signal,
-        onDelta(d) {
-          if (firstToken === null) firstToken = Math.round(performance.now() - started);
-          inflight.response += d;
-          renderDelta();
-        },
-      });
-      if (destroyed) return;
-      turns.push(turn);
-      storeTurnLocally(turn);
-      draft = [];
-      saveDraft();
-      logEvent('ai.received', { turn: turn.n, latencyMs: Math.round(performance.now() - started), firstTokenMs: firstToken, chars: turn.response.length, mock: turn.mock });
-      onTurn?.(turn);
-    } catch (e) {
-      if (destroyed || e.name === 'AbortError') return;
-      const key = e.code === 'llm_timeout' ? 'timeout' : e.code === 'rate_limited' ? 'rateLimited' : 'chat';
-      chatError = { key };
-      logEvent('ai.failed', { error: e.code ?? e.name });
-    } finally {
-      inflight = null;
-      aborter = null;
-      if (!destroyed) render();
-      notifyIdle();
-    }
+    if (!text || locked || conv.inflight || transcribing) return;
+    await conv.send(text, { segments: draft.length });
   }
   sendBtn.addEventListener('click', send);
 
-  function storeTurnLocally(turn) {
-    if (!session.data) return;
-    const key = String(round);
-    const rounds = session.data.rounds ?? (session.data.rounds = {});
-    const r = rounds[key] ?? (rounds[key] = { turns: [] });
-    r.turns = [...r.turns.filter((x) => x.n !== turn.n), turn];
-  }
-
-  // A turn still pending on the server (page reloaded while the AI was answering): wait for it.
-  function resumePending() {
-    const pending = serverTurns().find((x) => x.status === 'pending');
-    if (!pending || !live) return;
-    inflight = { ...pending };
-    const deadline = Date.now() + (config.ai.timeoutSeconds + 15) * 1000;
-    const poll = async () => {
-      if (destroyed) return;
-      try {
-        const data = await api.getSession();
-        session.set(data);
-        const t2 = (data.rounds?.[String(round)]?.turns ?? []).find((x) => x.n === pending.n);
-        if (t2?.status === 'done') {
-          turns.push(t2);
-          if (draftText() === t2.transcript) { draft = []; saveDraft(); }
-          onTurn?.(t2);
-          inflight = null;
-        } else if (!t2 || Date.now() > deadline) {
-          inflight = null;
-          chatError = { key: 'pendingLost' };
-        }
-      } catch { /* try again */ }
-      if (inflight) pollTimer = setTimeout(poll, 2000);
-      else { render(); notifyIdle(); }
-    };
-    pollTimer = setTimeout(poll, 1000);
-  }
-
   // ----- assemble -----
   const el = h('div.vc', { class: live ? '' : 'vc--static' }, taskPanel, convo, controls);
-  resumePending();
   render();
 
   return Object.assign(canvasApi, {
@@ -351,27 +289,23 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     noticeSlot,
     regions: { task: taskPanel, record: recButton.parentElement, transcript: null, send: sendBtn, output: convo, timer: timerSlot, finish: finishBtn },
     getRegion(name) { return name === 'transcript' ? el.querySelector('[data-region="transcript"]') : this.regions[name]; },
-    isBusy: () => !isIdle(),
+    isBusy: () => conv.isBusy(),
+    whenIdle: () => conv.whenIdle(),
     setLocked(on) {
       locked = on;
       renderControls();
-      if (!inflight) render();
+      if (!conv.inflight) render();
     },
     stopRecording(reason) {
       if (recorder?.recording || recorder?._starting) {
-        finalizing = true;
+        setFinalizing(true);
         recorder.stop(reason);
       }
     },
-    whenIdle() {
-      return isIdle() ? Promise.resolve() : new Promise((resolve) => idleWaiters.push(resolve));
-    },
     destroy() {
       destroyed = true;
-      clearTimeout(pollTimer);
       recorder?.destroy();
-      // An in-flight chat request is not aborted: the server stores the turn either way.
-      idleWaiters.splice(0).forEach((fn) => fn());
+      conv.destroy();
     },
   });
 }

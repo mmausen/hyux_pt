@@ -16,7 +16,7 @@ export default function create() {
       const { round } = ctx.step;
       try { ctx.session.set(await api.getSession()); } catch { /* use what we have */ }
       const task = ctx.session.task(round);
-      const startedAt = ctx.session.roundState(round).taskStartedAt;
+      const startedAt = ctx.session.progress(round).taskStartedAt;
       const turns = (ctx.session.data.rounds?.[String(round)]?.turns ?? []).filter((x) => x.status === 'done');
       const assistant = ctx.config.ai.assistantName;
       const when = (iso) => (startedAt ? t('interview.time', { elapsed: elapsed(Date.parse(iso) - startedAt), clock: clock(iso) }) : clock(iso));

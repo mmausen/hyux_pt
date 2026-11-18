@@ -27,11 +27,11 @@ function normalize(event) {
 }
 
 // Context of a round on the server: the task ID comes from the session's plan, the task start from the
-// round state the browser saved (state.rounds[round].taskStartedAt, epoch ms).
+// progress the browser saved (state.progress[round].taskStartedAt, epoch ms).
 export function roundContext(session, round) {
   if (!Number.isInteger(round)) return { round: null, taskId: null, msSinceTaskStart: null };
   const taskId = round === 0 ? 'practice' : orNull(session.plan?.[round - 1]);
-  const startedAt = session.state?.rounds?.[round]?.taskStartedAt;
+  const startedAt = session.state?.progress?.[round]?.taskStartedAt;
   return { round, taskId, msSinceTaskStart: Number.isFinite(startedAt) ? Date.now() - startedAt : null };
 }
 

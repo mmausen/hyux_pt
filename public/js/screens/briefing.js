@@ -16,7 +16,7 @@ export default function create() {
       const timer = ctx.config.timer;
 
       // Already confirmed (e.g. dev jump back): go straight on.
-      if (ctx.session.roundState(round).taskStartedAt) return ctx.flow.next();
+      if (ctx.session.progress(round).taskStartedAt) return ctx.flow.next();
 
       canvas = ctx.mode.createCanvas(ctx, { round, task, live: false, conceal: true });
       container.append(h('div.app-canvas-host', canvas.el));
@@ -28,7 +28,7 @@ export default function create() {
       }[timer.mode];
 
       const start = async () => {
-        await ctx.session.updateRound(round, { taskId: task.id, taskStartedAt: Date.now() }, { immediate: true });
+        await ctx.session.updateProgress(round, { taskId: task.id, taskStartedAt: Date.now() }, { immediate: true });
         logEvent('task.started', { title: task.title, timeLimitMinutes: task.timeLimitMinutes, timerMode: timer.mode });
         dialog.close();
         dialog = null;

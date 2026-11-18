@@ -11,7 +11,7 @@ export default function create() {
       const task = ctx.session.task(round);
       const page = (...children) => container.append(h('div.fh-page.app-page', h('div.fh-page__content.app-center', ...children)));
       const done = async () => {
-        await ctx.session.updateRound(round, { surveyAt: new Date().toISOString() }, { immediate: true });
+        await ctx.session.updateProgress(round, { surveyAt: new Date().toISOString() }, { immediate: true });
         ctx.flow.next();
       };
 
@@ -21,11 +21,11 @@ export default function create() {
           .replaceAll('{round}', encodeURIComponent(round))
           .replaceAll('{taskId}', encodeURIComponent(task?.id ?? ''));
         // "I Have Finished" unlocks once the questionnaire was opened, also after a reload.
-        const opened = Boolean(ctx.session.roundState(round).surveyOpenedAt);
+        const opened = Boolean(ctx.session.progress(round).surveyOpenedAt);
         const doneBtn = h('button.fh-btn.fh-btn--emphasized', { type: 'button', disabled: !opened, onclick: () => { doneBtn.disabled = true; logEvent('survey.externalDone', {}); done(); } }, t('survey.externalDone'));
         const openBtn = h('a.fh-btn', { href: url, target: '_blank', rel: 'noopener', onclick: () => {
           logEvent('survey.externalOpened', {});
-          ctx.session.updateRound(round, { surveyOpenedAt: new Date().toISOString() }, { immediate: true });
+          ctx.session.updateProgress(round, { surveyOpenedAt: new Date().toISOString() }, { immediate: true });
           doneBtn.disabled = false;
         } }, t('survey.externalOpen'));
         return page(h('section.fh-card.app-card',
@@ -35,8 +35,8 @@ export default function create() {
 
       const survey = (await import(`/content/survey.${ctx.config.study.locale}.js`)).default;
       // Answers are kept in the round state while the participant fills in the form, so a reload keeps them.
-      const answers = { ...(ctx.session.roundState(round).surveyDraft ?? {}) };
-      const keep = () => ctx.session.updateRound(round, { surveyDraft: answers });
+      const answers = { ...(ctx.session.progress(round).surveyDraft ?? {}) };
+      const keep = () => ctx.session.updateProgress(round, { surveyDraft: answers });
       const errors = {};
 
       const field = (q, i) => {

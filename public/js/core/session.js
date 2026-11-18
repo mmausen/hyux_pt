@@ -80,14 +80,15 @@ export function createSession() {
       return scheduleSave(immediate);
     },
 
-    // Per-round state lives under state.rounds[round].
-    roundState(round) {
-      return data?.state?.rounds?.[round] ?? {};
+    // Per-task progress the browser keeps (draft, task start, timer events, questionnaire answers) lives
+    // under state.progress[round]. Not to be confused with data.rounds: the conversation, owned by the server.
+    progress(round) {
+      return data?.state?.progress?.[round] ?? {};
     },
-    updateRound(round, patch, opts) {
-      const rounds = { ...(data?.state?.rounds ?? {}) };
-      rounds[round] = { ...(rounds[round] ?? {}), ...patch };
-      return session.update({ rounds }, opts);
+    updateProgress(round, patch, opts) {
+      const progress = { ...(data?.state?.progress ?? {}) };
+      progress[round] = { ...(progress[round] ?? {}), ...patch };
+      return session.update({ progress }, opts);
     },
 
     task(round) {
