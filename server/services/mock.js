@@ -17,7 +17,14 @@ const RESPONSES = [
   'Hi Laura, I enjoyed your recent post on warehouse automation. Since our demo, we have cut typical implementation time to six weeks. A logistics company close to yours went live this quarter. I would like to show you how they budgeted for it. Do you have 20 minutes next Tuesday or Wednesday?',
 ];
 
+const CHALLENGES = [
+  'Would the CFO read this passage as a benefit for the hospital, or as a benefit for you?',
+  'What if the opposite were true: what would you write if a smaller renewal served the customer better?',
+  'Which number would make this point harder to argue with, and do you actually have it?',
+];
+
 export function createMockService({ config }) {
+  let c = 0;
   let t = 0;
   let r = 0;
   const latency = () => config.dev.mockLatencyMs;
@@ -41,8 +48,19 @@ export function createMockService({ config }) {
     // Intents without an LLM: one intent per sentence or "and"-clause of the comment (the part after
     // "because" or a comma is its reason); an annotation is appended to the intent. Good enough to
     // click through the intents mode.
-    async structured({ kind, input, signal }) {
+    async structured({ kind, input, context = {}, signal }) {
       await sleep(latency(), signal);
+      // Highlight mode: a placeholder in square brackets is replaced by the annotation; other text gets the
+      // annotation added in brackets, so the change is easy to spot.
+      if (kind === 'highlightEdit') {
+        const { selected = '', annotation = '' } = context;
+        const said = annotation.replace(/[.!?]+$/, '');
+        const replace = /^\[.*\]$/s.test(selected.trim()) ? `${said.charAt(0).toUpperCase()}${said.slice(1)}.` : `${selected} (${said})`;
+        return { data: { edits: [{ find: selected, replace }] }, usage: null };
+      }
+      if (kind === 'challenge') {
+        return { data: { question: CHALLENGES[c++ % CHALLENGES.length] }, usage: null };
+      }
       const text = String(input.at(-1)?.content ?? '');
       const said = (label) => (text.split(`${label}:\n`)[1] ?? '').split('\n\n')[0].trim();
       const short = (s) => s.split(/\s+/).slice(0, 12).join(' ').replace(/[.,;:]+$/, '');

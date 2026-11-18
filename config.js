@@ -44,11 +44,14 @@ export default {
     // Default interaction mode for new sessions (a folder in public/js/modes/). In dev mode the dev panel
     // can switch the current session.
     //   'voice'   : spoken instructions build the instruction; each send goes to the AI with the history.
+    //   'highlight': the task starts from the starting draft. The participant highlights a passage, annotates
+    //               it by voice and either has the AI change only what is needed (in place) or asks for a
+    //               short question that challenges their standpoint. No main record or send button.
     //   'intents' : the task starts from its generic starting draft (`scaffold` in data/tasks.json; without
     //               one, the first instruction is sent as spoken). Each recording is split into intent
     //               cards that can be switched off or changed by voice; a send hands the AI only the
     //               active intents and the latest draft.
-    mode: 'intents',
+    mode: 'highlight',
     recordingMode: 'pushToTalk', // 'pushToTalk' (hold button or Space) | 'toggle' (click to start, click to stop)
     maxRecordingSeconds: 60,
   },
@@ -112,6 +115,29 @@ export default {
       // A second, identical intent request starts if the first has not answered after this many seconds;
       // the first answer is used. Cuts the rare very slow request (seen: 21 s instead of 2–3 s). 0 = off.
       hedgeAfterSeconds: 5,
+    },
+    // Prompts of the 'highlight' mode. Separate calls; the model sees the draft (with the highlighted
+    // passage marked) and the annotation, never the task.
+    highlight: {
+      editPrompt:
+        'You edit a draft in place. The author has highlighted a passage (between ⟦ and ⟧ in the draft) and ' +
+        'said what they want changed about it. The comment was transcribed automatically and may contain ' +
+        'recognition errors; interpret it sensibly. Return the smallest set of edits that carries out the ' +
+        'comment. Each edit has find, an exact, contiguous piece of the current draft (without the ⟦ ⟧ ' +
+        'markers), long enough to occur only once, and replace, the text that takes its place. Change the ' +
+        'highlighted passage; change text outside it only where the comment asks for it or the draft would ' +
+        'otherwise contradict itself. Keep everything else exactly as it is, including line breaks. A ' +
+        'placeholder in square brackets may be replaced when the comment gives what it needs. Write plain ' +
+        'text without Markdown. Never return the whole draft as one edit.',
+      challengePrompt:
+        'You help an author think critically about their own writing. You receive their draft, a passage ' +
+        'they highlighted and, if they gave one, their spoken comment on it (transcribed automatically). ' +
+        'Ask exactly one short question, at most 25 words, that challenges the standpoint behind the passage ' +
+        'or the comment and makes them consider whether there is a real alternative: another priority, the ' +
+        'reader\'s point of view, a risk, or the opposite choice. Address the author as "you". Do not answer ' +
+        'the question, do not suggest wording and do not praise. Return the question only.',
+      maxOutputTokens: 1500, // edits can be long when a placeholder becomes a paragraph
+      hedgeAfterSeconds: 0, // edits take longer than intents; no second request
     },
   },
 

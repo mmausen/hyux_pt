@@ -59,6 +59,11 @@ export const api = {
     annotate: (round, id, text, signal) => request('POST', `/api/intents/${encodeURIComponent(id)}/annotate`, { json: { round, text }, signal }),
     setActive: (round, id, active) => request('PUT', `/api/intents/${encodeURIComponent(id)}`, { json: { round, active } }),
   },
+  // Highlight mode (server/routes/highlight.js). selection: { start, end, selected }.
+  highlight: {
+    edit: (round, selection, text, signal) => request('POST', '/api/highlight/edit', { json: { round, ...selection, text }, signal }),
+    challenge: (round, selection, text, signal) => request('POST', '/api/highlight/challenge', { json: { round, ...selection, text }, signal }),
+  },
   dev: {
     startSession: () => request('POST', '/api/dev/session', { json: {} }),
     setMock: (mock) => request('PUT', '/api/dev/mock', { json: mock }),
