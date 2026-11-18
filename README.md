@@ -1,0 +1,440 @@
+# Sales Workbench study prototype
+
+This is a research prototype for a voice-driven AI task study. Participants are sales professionals. They give spoken instructions to an AI assistant and use it to complete realistic sales writing tasks. The assistant replies in text. The study then guides them through a questionnaire after each task.
+
+- The stack is Node and Express with vanilla ES modules in the browser. There is no build step.
+- Speech-to-text and the LLM run through the OpenAI API, called **only from the server**.
+- The UI uses the Fiori Horizon design system (`design-system/`) in light mode with compact density.
+
+---
+
+## Contents
+
+1. [Setup](#setup)
+2. [How the study runs](#how-the-study-runs)
+3. [Configuration reference](#configuration-reference) (every option in `config.js` and `.env`)
+4. [Adding or changing a task](#adding-or-changing-a-task)
+5. [Text, questionnaire and language](#text-questionnaire-and-language)
+6. [Adding an interaction mode](#adding-an-interaction-mode)
+7. [Dev mode](#dev-mode)
+8. [Logging](#logging)
+9. [Security and privacy](#security-and-privacy)
+10. [Running a study session](#running-a-study-session)
+11. [Project structure](#project-structure)
+
+---
+
+## Setup
+
+You need Node.js 20.12 or later. The project was built on Node 26.
+
+```bash
+npm install
+```
+
+```bash
+cp .env.example .env
+```
+
+Open `.env`, then set `OPENAI_API_KEY`. Set `DEV_MODE=true` while you build or test (see [Dev mode](#dev-mode)).
+
+```bash
+npm start
+```
+
+Open http://localhost:3000 (or the `PORT` you set).
+
+The server checks `config.js` and `data/tasks.json` at startup. If anything is wrong, it lists every problem and does not start. To run the same check without starting the server:
+
+```bash
+npm run check:config
+```
+
+Other scripts:
+
+| Script | What it does |
+|---|---|
+| `npm run dev` | Starts the server and restarts it when server files change. Browser files never need a restart, only a page reload. |
+| `npm run build:tokens` | Regenerates `design-system/tokens.css` from `design-system/tokens.json`. Run it only after you replace the design-system export. |
+
+Changes to `config.js`, `data/tasks.json` or `.env` need a server restart. Changes to `content/` and `public/` need only a page reload.
+
+---
+
+## How the study runs
+
+The screen order comes from `flow` in `config.js`:
+
+```
+pre:   welcome → systemCheck → tutorial
+round: briefing → task → survey → interview      (repeated flow.rounds times)
+post:  end
+```
+
+| Screen | What happens |
+|---|---|
+| **welcome** | The participant enters their ID, and the server checks it. A small or unsupported browser gets a notice here. |
+| **systemCheck** | Microphone permission, then a level meter. The participant reads the test sentence aloud, the recording is transcribed, and one short LLM call is made. Each check can be retried. After `retriesBeforeContact` failed retries, a contact text appears. |
+| **tutorial** | A guided tour over a sample canvas that highlights one area at a time. Then, if `tutorial.practiceTurn` is on, one real instruction is sent to the assistant. |
+| **briefing** | The task and its briefing are shown in a dialog over the canvas, with the task text hidden behind it. **Start Task** starts the timer. |
+| **task** | The main canvas. The participant records an instruction, checks the transcript, and sends it. The assistant's response appears, and the participant keeps going until they select **Finish Task** or time runs out. |
+| **survey** | The questionnaire about the task, either built in or a link to an external tool. |
+| **interview** | "Conversation Review": a read-only view of the task and every turn with timestamps, to look at together with the interviewer. Off by default. |
+| **end** | Marks the session complete and shows the completion code, if one is set. |
+
+**Reloading** the page resumes exactly where the participant was:
+
+- the current step
+- the time limit, which counts from the stored start time
+- the instruction draft
+- a response that was still being written
+- answers already given in the questionnaire
+
+The session lives on the server (`sessions/`). The browser only keeps the session ID in `localStorage`. If a participant enters their ID again in another browser, the same session continues there (when `allowReuse` is false).
+
+---
+
+## Configuration reference
+
+### `.env` (secrets and environment, never committed)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OPENAI_API_KEY` | — | Required unless every call is mocked in dev mode. It stays on the server. |
+| `PORT` | `3000` | HTTP port. |
+| `DEV_MODE` | `false` | `true` turns on the dev panel, the dev routes and mock mode. **Must be off for participants.** It cannot be turned on from the URL or the browser. |
+| `TRUST_PROXY` | unset | Set it to `true` behind an HTTPS reverse proxy, so that rate limiting sees the real client IPs. |
+
+### `config.js`
+
+Each section of `config.js` is documented below. Every option is checked at startup.
+
+#### `study`
+| Option | Example | Meaning |
+|---|---|---|
+| `id` | `'hyux-formative-01'` | Identifies the study run. |
+| `productName` | `'Sales Workbench'` | Plain text shown in the shell bar and as the page title. Don't use logos or SAP product names. |
+| `locale` | `'en'` | Loads `content/strings.<locale>.js` and `content/survey.<locale>.js`, and sets the page language. |
+| `completionCode` | `''` | Shown on the end screen if it is not empty, for example a panel provider's code. It reaches the browser only on the end screen. |
+
+#### `participants`
+| Option | Meaning |
+|---|---|
+| `validIds` | List of valid participant IDs. Matching ignores case and surrounding spaces. **This list is never sent to the browser.** |
+| `allowReuse` | `false`: one session per ID. Entering the ID again resumes that session. After the session is completed, the ID is rejected. `true`: every entry starts a new session. |
+
+#### `flow`
+| Option | Meaning |
+|---|---|
+| `pre`, `round`, `post` | Screen order before, during (×N) and after the rounds. Screen names are the modules in `public/js/screens/index.js`. |
+| `enabled` | `{ tutorial, survey, interview }`. A screen set to `false` is skipped everywhere. |
+| `rounds` | Number of tasks per participant (N). It must not exceed the number of tasks available to a participant. |
+| `taskSelection.mode` | `'fixed'` uses `order` as is. `'random'` shuffles `order` once per participant (and keeps it across reloads). `'perParticipant'` uses the participant's list in `perParticipant`. |
+| `taskSelection.order` | Task IDs from `data/tasks.json`. |
+| `taskSelection.perParticipant` | `{ P01: ['task-02', 'task-01', 'task-03'], … }`. IDs that aren't listed fall back to `order`. Every ID must be in `validIds`, and every task ID must exist. |
+
+The tasks for a session are assigned when it starts and stored with it. Changing the selection later doesn't affect running sessions.
+
+#### `interaction`
+| Option | Meaning |
+|---|---|
+| `mode` | Folder in `public/js/modes/` (`'voice'`). See [Adding an interaction mode](#adding-an-interaction-mode). |
+| `recordingMode` | `'pushToTalk'`: hold the button or the Space key. Space works only when focus isn't in a text field. `'toggle'`: select once to start and again to stop. The tutorial text follows this setting. |
+| `maxRecordingSeconds` | A recording stops automatically after this long and is transcribed. |
+
+#### `tutorial`
+| Option | Meaning |
+|---|---|
+| `practiceTurn` | `true`: the tutorial ends with one real recording sent to the AI. It uses real API calls unless mock mode is on. |
+
+#### `timer`
+| Option | Meaning |
+|---|---|
+| `mode` | `'hard'`: at the limit, a notice shows for `endNoticeSeconds`, then the task ends. `'soft'`: at the limit, a notice shows and the bar turns red, but the task goes on until the participant ends it. `'grace'`: at the limit, `graceMinutes` of extra time start. When they run out, the task ends like in `'hard'`. |
+| `graceMinutes` | Extra time in `'grace'` mode. |
+| `warningSecondsBeforeLimit` | The bar turns orange and a notice appears this many seconds before the limit (`0` = no warning). |
+| `endNoticeSeconds` | How long the "time is up" notice shows before the study moves on. |
+
+Participants see time only as a progress bar under the controls, with no countdown in numbers. The briefing shows the limit as the "Recommended Time Limit". The time limit per task is `timeLimitMinutes` in `data/tasks.json`. If the limit is reached during a recording, the recording stops and is transcribed, and the transcript is logged. If it is reached while the assistant is writing, the response is finished and shown before the task ends.
+
+#### `ai`
+| Option | Meaning |
+|---|---|
+| `assistantName` | Name shown for the assistant. Use a job-based name, not a human name. |
+| `model` | OpenAI model, called through the Responses API. |
+| `systemPrompt` | Instructions for the model. **The model never sees the task.** It sees only this prompt, the earlier turns (if `sendHistory`) and the new instruction. |
+| `temperature` | `null` = not sent. Some models (for example `gpt-6.2-sol`) don't accept it. |
+| `reasoningEffort` | `null` = not sent. Otherwise `'low'`, `'medium'`, `'high'`, `'xhigh'` or `'max'`. Lower effort gives faster responses. |
+| `maxOutputTokens` | Upper limit for one response. |
+| `sendHistory` | `true`: the earlier turns of the current task are sent with each instruction. |
+| `stream` | `true`: the response appears while it is being written. |
+| `timeoutSeconds` | A response that takes longer fails with a retry option. |
+
+#### `stt` (speech-to-text)
+| Option | Meaning |
+|---|---|
+| `model` | OpenAI transcription model. |
+| `languages` | Expected languages, for example `['en']` or `['en', 'de']`. |
+| `prompt` | Optional vocabulary hint, such as product or customer names. |
+| `timeoutSeconds` | Server-side timeout for one transcription. |
+
+#### `systemCheck`
+| Option | Meaning |
+|---|---|
+| `testSentence` | The sentence participants read aloud. |
+| `maxRecordingSeconds` | Recording limit for the test. |
+| `transcribeTimeoutSeconds`, `llmTimeoutSeconds` | Timeouts for the two checks. |
+| `retriesBeforeContact` | After this many failed retries, the screen shows the contact text from the strings file. |
+| `fuzzyMatch` | `{ enabled, threshold }`. If enabled, the transcript must share at least `threshold` (0–1) of its words with the test sentence. Off by default: any non-empty transcript passes. |
+
+#### `survey`
+| Option | Meaning |
+|---|---|
+| `type` | `'internal'` shows `content/survey.<locale>.js`, and the answers go to the log. `'external'` shows an **Open Questionnaire** link and an **I Have Finished the Questionnaire** button. |
+| `externalUrl` | `'external'` only. `{participantId}`, `{round}` and `{taskId}` are filled in. |
+
+#### `limits`
+| Option | Meaning |
+|---|---|
+| `maxAudioUploadMB` | Larger uploads are rejected (413). |
+| `rateLimit.windowSeconds` | Window for the limits below. |
+| `rateLimit.transcribePerWindow` | Transcriptions per session per window. |
+| `rateLimit.chatPerWindow` | AI requests (and system-check calls) per session per window. |
+| `rateLimit.sessionStartPerWindow` | ID entries per IP per window. This limits guessing. |
+
+#### `logging`
+| Option | Meaning |
+|---|---|
+| `dir` | Folder for the log files (`logs/`, gitignored). |
+| `storeAudio` | `false` (default): recordings are transcribed and discarded. `true`: each recording is also saved to `logs/audio/<participantId>/`, and the `server.transcribe` event names the file. Only turn this on if the consent covers it. |
+
+#### `dev` (used only when `DEV_MODE=true`)
+| Option | Meaning |
+|---|---|
+| `participantId` | ID used by **Skip ID**. It doesn't need to be in `validIds`. |
+| `mockByDefault` | Dev sessions start with mock speech-to-text and a mock LLM (no API cost). |
+| `timerSpeeds` | Speed choices in the dev panel. |
+| `mockLatencyMs` | Simulated delay of mock calls. |
+
+---
+
+## Adding or changing a task
+
+Tasks are in `data/tasks.json`:
+
+```json
+{
+  "id": "task-04",
+  "title": "Follow up after a trade fair",
+  "situation": "Background the participant needs: who, what happened, what they know.",
+  "task": "The instruction: what the participant should get the assistant to produce.",
+  "briefing": "Short text shown before the task starts (may be empty).",
+  "timeLimitMinutes": 6,
+  "materials": [
+    { "title": "Booth Notes", "body": "Text. Line breaks are kept." }
+  ]
+}
+```
+
+- `id`, `title`, `situation`, `task` and `timeLimitMinutes` are required. `briefing` may be an empty string. `materials` is optional.
+- Materials appear behind **Show Materials** in the task panel.
+- `placeholderFields` (optional) is only a note for authors. It marks fields that still hold generated placeholder text. The three current tasks have placeholder `task`, `briefing` and `materials`, so replace them with the real content.
+- To use the new task, add its ID to `flow.taskSelection.order` (or to `perParticipant` lists) and, if needed, raise `flow.rounds`. Then restart and run `npm run check:config`.
+
+The browser receives only the tasks assigned to the current session.
+
+---
+
+## Text, questionnaire and language
+
+- **All UI text** is in `content/strings.en.js`, grouped by screen. Follow the design-system writing rules:
+  - Title Case for buttons and titles, and buttons start with a verb.
+  - Plain, neutral sentences, without emoji or exclamation marks.
+  - The working state describes what is happening (never "Thinking…").
+- **The questionnaire** is in `content/survey.en.js`. Each question has an `id`, which becomes the key in the logged answers, a `text`, and `required`. The types are:
+  - `scale`: needs `min`, `max`, and optionally `minLabel` and `maxLabel`. Shown as one button per value.
+  - `choice`: needs `options`. Single choice.
+  - `text`: free text, up to 2000 characters.
+- **Another language:** copy both files with the new locale code (for example `strings.de.js` and `survey.de.js`), translate them, set `study.locale`, and add the language to `stt.languages`. Placeholders such as `{round}` must stay unchanged.
+
+---
+
+## Adding an interaction mode
+
+The core is independent of how participants give instructions. The core consists of:
+
+- the flow controller
+- the timer
+- the logger
+- the AI client
+- the session state
+- the screens
+
+A mode is a folder `public/js/modes/<name>/` whose `index.js` exports:
+
+```js
+export const name = 'typed';
+export function createCanvas(ctx, options) { … }          // the task UI
+export function tutorialSteps({ recordingMode }) { … }    // the tutorial tour
+```
+
+**`createCanvas(ctx, { round, task, live, conceal, sample, showFinish, onTurn })`** builds the task UI and returns:
+
+| Member | Used by | Purpose |
+|---|---|---|
+| `el` | all | Root element; the screen inserts it. |
+| `timerSlot` | task | Element where the task screen puts the timer bar. |
+| `noticeSlot` | task, tutorial | Element for notices (time warnings, practice banner). |
+| `getRegion(name)` | tutorial | Returns the element for a tour step (`task`, `record`, `transcript`, `send`, `output`, `timer`, `finish` in the voice mode). |
+| `onFinishRequest` | task | Set by the task screen; call it when the participant selects Finish Task. |
+| `isBusy()` | task | True while a recording, transcription or AI response is running. |
+| `setLocked(bool)` | task | Turns input off (for example at the time limit). |
+| `stopRecording(reason)` | task | Stops a running recording (the time limit uses this). |
+| `whenIdle()` | task | Promise that resolves when nothing is running any more. |
+| `destroy()` | all | Releases listeners and timers. |
+
+Options:
+- `live: false` renders the same layout without input. The briefing backdrop and the tutorial use it.
+- `conceal` hides the task text.
+- `sample` provides `{ turns, draft }` for the tutorial.
+- `onTurn(turn)` is called after each finished AI response.
+
+Use `ctx.api.transcribe`, `sendChat` from `core/aiClient.js`, `createRecorder` from `core/recorder/`, and `logEvent`. That way the server routes, logging and mock mode work unchanged.
+
+**`tutorialSteps()`** returns `[{ region, titleKey, textKey }]`. Each region is the name passed to `getRegion`. The keys point to text in the strings file.
+
+Set `interaction.mode: '<name>'` in `config.js`. The server checks that the folder exists.
+
+Recording itself sits behind the `Recorder` interface (`public/js/core/recorder/`) with `pushToTalk` and `toggle` implementations. A new way of recording is a new subclass, registered in `recorder/index.js`.
+
+---
+
+## Dev mode
+
+Dev mode is on only with `DEV_MODE=true` in `.env`. When it is off, the dev panel file and the `/api/dev` routes are not served at all (404).
+
+The **Dev Mode** panel at the top right (it can be collapsed) offers:
+
+- **Session:** shows the current participant, session and tasks.
+  - **Skip ID** starts a dev session (participant `dev.participantId`).
+  - **Skip System Check** and **Skip Tutorial** jump past those screens.
+  - **New Session** forgets the session in this browser.
+- **Mock mode:** switches for Speech-to-text and the LLM.
+  - Mock transcription returns the test sentence in the system check and canned instructions elsewhere.
+  - The mock LLM returns canned drafts.
+  - Neither costs anything. Dev sessions start mocked when `dev.mockByDefault` is true.
+- **Jump to step:** go to any step of the flow.
+- **Timer speed:** 1×, 10× or 60×, to test time limits quickly. The choice is remembered in this browser.
+- **Session state:** the stored browser state.
+- **Logged events:** live list of events as they are logged.
+
+To test the end of a task quickly, set a task's `timeLimitMinutes` to `1` or use 60× speed.
+
+---
+
+## Logging
+
+`logEvent(type, payload)` in the browser buffers events and sends them in batches to `POST /api/log`. They are also sent when the tab is hidden or closed. The server writes them through the logger interface (`server/logger/index.js`).
+
+Storage today is one JSON-lines file per participant: `logs/<participantId>.jsonl`. Failed ID entries go to `logs/invalid-attempts.jsonl` (only the length of what was typed). To store events elsewhere (a database or a service), replace the implementation in `server/logger/` and keep `write(event)`. No route or screen changes.
+
+Every event has the same fields:
+
+```json
+{
+  "ts": "2026-11-18T12:17:30.202Z",
+  "clientTs": "2026-11-18T12:17:29.196Z",
+  "participantId": "P07",
+  "sessionId": "7c3e1bc8-…",
+  "round": 1,
+  "taskId": "task-01",
+  "msSinceTaskStart": 44073,
+  "type": "ai.received",
+  "payload": { }
+}
+```
+
+The fields mean:
+- `ts`: server time.
+- `clientTs`: browser time, or `null` for server events.
+- `round`: 1..N for tasks, 0 for the tutorial practice turn, `null` outside a round.
+- `msSinceTaskStart`: counts from **Start Task**.
+- **Participant and session always come from the server-side session, never from the browser.**
+- For server events, `msSinceTaskStart` is server time minus the task start the browser saved. A clock difference between the participant's computer and the server shifts it by that amount. Use `clientTs` with browser events for exact ordering within a session.
+
+Events (`server.*` and `session.*` come from the server; all others come from the browser):
+
+| Area | Events |
+|---|---|
+| Session | `session.started`, `session.resumed`, `session.completed`, `session.invalidId`, `session.client` (browser, viewport) |
+| Steps | `step.entered`, `step.left` (with reason), `step.error` |
+| System check | `systemCheck.check` (each check and its result), `systemCheck.passed`, `recording.*` with `context: 'systemCheck'` |
+| Tutorial | `tutorial.started`, `tutorial.step`, `tutorial.tourCompleted`, `tutorial.practiceStarted`, `tutorial.practiceTurn`, `tutorial.completed` |
+| Task | `task.started`, `task.finishRequested`, `task.finishCancelled`, `task.finished` (reason, elapsed time, turns) |
+| Timer | `timer.warning`, `timer.limit`, `timer.graceEnd` |
+| Recording | `recording.start`, `recording.stop` (duration, reason, size, format, peak level), `recording.error` |
+| Transcription | `transcript.received` (text, latency), `transcript.empty`, `transcript.failed`, `draft.cleared` (the discarded text), `server.transcribe` (text, latency, size, format, audio file if stored) |
+| AI | `ai.sent` (instruction text), `ai.received` (latency, first token), `ai.failed`, `server.ai.request` (instruction, model, history length), `server.ai.response` (**response text**, latency, token usage) |
+| Questionnaire | `survey.submitted` (answers), `survey.externalOpened`, `survey.externalDone` |
+| End | `study.completed` |
+| Problems | `client.error` (uncaught errors, failed saves), `client.saveRecovered`, `client.smallScreen`, `server.error` (route, error code, detail) |
+
+The complete conversation of each round is also stored with the session in `sessions/<sessionId>.json` (`rounds[round].turns`). It includes the instruction, response, times, latency and token usage.
+
+---
+
+## Security and privacy
+
+- The OpenAI key is read from `.env` on the server. The browser never calls OpenAI, and the key never appears in any response.
+- Participant IDs are checked on the server. The browser receives neither the list nor the system prompt, only a safe part of the config (`server/config/clientConfig.js`).
+- Every API call after the ID entry needs the session ID that the server issued.
+- Limits:
+  - audio size (`maxAudioUploadMB`), with only audio formats accepted
+  - recording length
+  - instruction length (4000 characters)
+  - request body size (256 KB)
+  - rate limits per session and per IP
+- Security headers include a Content Security Policy. Scripts load only from this server. Icons and the 72 font load from jsDelivr.
+- Audio isn't stored by default (`logging.storeAudio: false`).
+- `logs/`, `sessions/`, `.env` (and any `.env.*` except `.env.example`) and all `*.jsonl` files are gitignored. Treat `logs/` and `sessions/` as research data: they contain everything participants said to the assistant.
+- A pre-commit check in `.githooks/pre-commit` blocks these files even when they are added with `git add -f`, and blocks any change that contains something that looks like an OpenAI key (`sk-…`). `npm install` turns it on for the clone (the `prepare` script sets `core.hooksPath`). If you clone without running `npm install`, run `git config core.hooksPath .githooks` once.
+
+---
+
+## Running a study session
+
+Before a session:
+1. Set `DEV_MODE=false` in `.env`, and check `validIds`, `rounds`, `taskSelection`, `timer` and `survey` in `config.js`.
+2. Run `npm run check:config`, then `npm start`.
+3. Go through the study once with a spare ID, using real calls. Then delete that ID's files in `logs/` and `sessions/`, or keep a spare ID only for this.
+4. Use the latest Chrome or Edge on a laptop or desktop with a working microphone. Firefox and Safari also work.
+
+To deploy on a server, run it behind HTTPS, because browsers allow the microphone only on HTTPS or localhost. Set `TRUST_PROXY=true` there. `logs/` and `sessions/` must be on persistent storage.
+
+To start over with an ID, delete that participant's session file in `sessions/`. The `participantId` is inside the file. You can also set `allowReuse: true` for the test.
+
+---
+
+## Project structure
+
+```
+config.js                 study configuration (single source of truth)
+data/tasks.json           tasks
+content/                  all UI text and the questionnaire, per locale
+design-system/            Fiori Horizon export (don't edit; tokens.css is generated)
+server/
+  index.js                Express app, security headers, static files
+  config/                 load + validate config, client-safe subset
+  routes/                 session, transcribe/health, chat (streaming), log, dev
+  services/               OpenAI calls, mocks, session store, task assignment
+  middleware/             session check, rate limiting
+  logger/                 logger interface + JSONL implementation
+public/
+  index.html, css/app.css shell and prototype styles (only reads --sap… variables)
+  js/main.js              bootstrap
+  js/core/                flow controller, session, API client, logEvent, timer, recorder, dialogs, coach marks
+  js/screens/             one module per screen: { mount(container, ctx), unmount() }
+  js/modes/voice/         voice interaction mode: canvas + tutorial steps
+dev-client/devPanel.js    dev panel (served only in dev mode)
+scripts/build-tokens.mjs  generates design-system/tokens.css
+```

@@ -1,0 +1,43 @@
+<!-- @dsCard group="Agents" height=760 subtitle="Assistant panel: prompt, thinking, rich response, follow-ups" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>preview</title>
+<style>body{margin:0;background:var(--sapBackgroundColor);} .pv{padding:1rem;display:flex;flex-direction:column;gap:1rem;font-family:var(--font-sans);font-size:.875rem;color:var(--sapTextColor)} .pv.fh-row{flex-direction:row;flex-wrap:wrap;align-items:center} .pv-cap{color:var(--sapContent_LabelColor);font-size:.75rem;margin-bottom:.25rem}</style>
+</head>
+<body>
+<div class="pv fh-app" style="height:760px;box-sizing:border-box;align-items:flex-start">
+<section class="fh-convo" aria-label="Assistant">
+  <header class="fh-convo__header"><span class="fh-agent-avatar fh-agent-avatar--xs" aria-hidden="true"><span class="fh-icon" data-icon="ai"></span></span><span class="fh-convo__title">Assistant</span>
+    <button class="fh-btn fh-btn--transparent fh-btn--icon" aria-label="History"><span class="fh-icon" data-icon="history"></span></button>
+    <button class="fh-btn fh-btn--transparent fh-btn--icon" aria-label="More"><span class="fh-icon" data-icon="overflow"></span></button>
+    <button class="fh-btn fh-btn--transparent fh-btn--icon" aria-label="Close"><span class="fh-icon" data-icon="decline"></span></button></header>
+  <div class="fh-convo__body">
+    <div class="fh-msg-user">Which supplier deliveries are at risk this week?</div>
+    <div class="fh-msg-agent"><span class="fh-agent-avatar fh-agent-avatar--xs" aria-hidden="true"><span class="fh-icon" data-icon="ai"></span></span><div class="fh-msg-agent__body">
+      <p>3 deliveries are at risk. The biggest impact is Stahlwerk Ost, which blocks production order 1000482.</p>
+      <div class="fh-embed">
+        <div class="fh-embed__row"><div class="fh-grow"><div class="fh-cell-title">Stahlwerk Ost KG</div><div class="fh-cell-sub">PO 4500017755 · 2 days late</div></div><span class="fh-status fh-status--error">High</span></div>
+        <div class="fh-embed__row"><div class="fh-grow"><div class="fh-cell-title">Kartonagen Lenz</div><div class="fh-cell-sub">PO 4500017741 · 1 day late</div></div><span class="fh-status fh-status--warning">Medium</span></div>
+        <div class="fh-embed__row"><div class="fh-grow"><div class="fh-cell-title">Clean &amp; Co. GmbH</div><div class="fh-cell-sub">PO 4500017702 · at risk</div></div><span class="fh-status fh-status--warning">Medium</span></div>
+      </div>
+      <div class="fh-response-actions"><button class="fh-btn fh-btn--transparent fh-btn--icon" aria-label="Helpful"><span class="fh-icon" data-icon="thumb-up"></span></button><button class="fh-btn fh-btn--transparent fh-btn--icon" aria-label="Not helpful"><span class="fh-icon" data-icon="thumb-down"></span></button><button class="fh-btn fh-btn--transparent fh-btn--icon" aria-label="Copy"><span class="fh-icon" data-icon="copy"></span></button><span class="fh-ai-notice"><span class="fh-icon" data-icon="ai"></span>AI can make mistakes. Check for accuracy.</span></div>
+      <div class="fh-chips"><button class="fh-chip">Draft reminders</button><button class="fh-chip">Find alternative suppliers</button></div>
+    </div></div>
+    <div class="fh-msg-user">Draft reminders and find an alternative for Stahlwerk Ost.</div>
+    <div class="fh-msg-agent"><span class="fh-agent-avatar fh-agent-avatar--xs" aria-hidden="true"><span class="fh-icon" data-icon="ai"></span></span><div class="fh-msg-agent__body"><div class="fh-msg-agent__thinking"><span class="fh-busy" aria-hidden="true"><i></i><i></i><i></i></span>Checking 14 qualified suppliers for steel coils</div></div></div>
+  </div>
+  <div class="fh-convo__footer"><div class="fh-prompt"><div class="fh-prompt__box"><textarea rows="1" placeholder="Ask or describe a task" aria-label="Prompt"></textarea><button class="fh-btn fh-btn--transparent fh-btn--icon" aria-label="Stop"><span class="fh-icon" data-icon="stop"></span></button></div></div></div>
+</section></div>
+<script type="module">
+// SAP icons (Horizon set "SAP-icons-v5") as SVG path data from @ui5/webcomponents-icons, pinned.
+const V = "2.9.0";
+await Promise.all([...document.querySelectorAll("[data-icon]")].map(async (el) => {
+  try {
+    const m = await import(`https://cdn.jsdelivr.net/npm/@ui5/webcomponents-icons@${V}/dist/v5/${el.dataset.icon}.js/+esm`);
+    const d = Array.isArray(m.pathData) ? m.pathData : [m.pathData];
+    el.innerHTML = `<svg viewBox="0 0 512 512" aria-hidden="true">${d.map((p) => `<path d="${p}"/>`).join("")}</svg>`;
+  } catch (e) { /* icon unavailable: the empty 1rem box keeps layout */ }
+}));
+</script>
+</body>
+</html>

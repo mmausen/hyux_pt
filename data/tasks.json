@@ -1,0 +1,75 @@
+[
+  {
+    "id": "task-01",
+    "title": "Re-engage a cold prospect by email to Laura",
+    "situation": "Laura Brandt, Head of Operations at a mid-sized logistics company, had a promising demo with you three months ago, then went silent. Participants get a one-page dossier: demo notes, her two concerns (implementation effort and budget timing), one LinkedIn post she recently shared, and the fact that a competitor of hers just became your customer.",
+    "task": "Use the assistant to write an email to Laura Brandt that restarts the conversation. The email should respond to her two concerns and give her a concrete reason to reply.",
+    "briefing": "You will write a re-engagement email to a prospect who went silent after a demo. Read the dossier before you start. Give the assistant all instructions by voice.",
+    "timeLimitMinutes": 7,
+    "materials": [
+      {
+        "title": "Demo Notes",
+        "body": "Demo on Aug 12, 2026, 45 minutes, video call.\nAttendees: Laura Brandt (Head of Operations), Tobias Klein (IT Lead).\nLaura was most interested in automated dock scheduling and the live carrier dashboard.\nTobias asked about the ERP integration and data migration.\nAgreed next step: proposal by end of August. Proposal sent Aug 28. No reply since."
+      },
+      {
+        "title": "Her Concerns",
+        "body": "1. Implementation effort: her team is small and already stretched. She does not want a six-month IT project.\n2. Budget timing: the operations budget for next year is approved in January. A purchase this year would need a special release."
+      },
+      {
+        "title": "Recent LinkedIn Post",
+        "body": "Shared by Laura Brandt two weeks ago:\n\"Peak season is coming and once again the bottleneck is not the trucks, it is the yard. Every minute a truck waits at the gate costs us twice: in fees and in planner time. Curious how others are handling this.\""
+      },
+      {
+        "title": "Market Update",
+        "body": "Nordline Freight, a direct competitor of Laura's company in the same region, signed with you last month. Their rollout took seven weeks and needed one part-time IT contact on their side."
+      }
+    ],
+    "placeholderFields": ["task", "briefing", "materials"]
+  },
+  {
+    "id": "task-02",
+    "title": "Prepare an objection response for a pricing pushback",
+    "situation": "A procurement manager writes: “Your offer is 30% above the alternative we’re evaluating. Unless you can justify that, we’ll go with them.” Participants get the deal context: deal size, the features the competitor lacks, a discount ceiling of 10%, and the relationship history.",
+    "task": "Use the assistant to prepare a written reply to the procurement manager that justifies the price difference. You can offer a discount, but not more than 10%.",
+    "briefing": "You will answer a pricing objection from a procurement manager. Read the deal context before you start. Give the assistant all instructions by voice.",
+    "timeLimitMinutes": 6,
+    "materials": [
+      {
+        "title": "Deal Context",
+        "body": "Customer: mid-sized manufacturer of industrial components.\nContact: Markus Weber, Procurement Manager.\nDeal size: 96,000 EUR per year, 3-year contract, 120 users.\nYour champion: Sandra Hoffmann, Head of Sales Operations."
+      },
+      {
+        "title": "Features the Competitor Lacks",
+        "body": "1. Native integration with the customer's ERP system (the competitor needs a third-party connector at extra cost).\n2. Forecasting module with deal-level risk scoring.\n3. 24/7 support with a guaranteed 4-hour response time."
+      },
+      {
+        "title": "Discount Ceiling",
+        "body": "Maximum discount you are allowed to offer without approval: 10%."
+      },
+      {
+        "title": "Relationship History",
+        "body": "Pilot with 15 users from March to May 2026. Sandra's team reported 6 hours saved per rep per month.\nThe customer has been a reference in two of your case studies.\nProcurement joined the process only last week."
+      }
+    ],
+    "placeholderFields": ["task", "briefing", "materials"]
+  },
+  {
+    "id": "task-03",
+    "title": "Write a deal summary for your sales manager",
+    "situation": "The rep has a stalled €80k deal with a messy history. Participants get a raw activity log of about ten entries: calls, emails, a champion who left the company, a new stakeholder, a slipped close date.",
+    "task": "Use the assistant to write a short summary of this deal for your sales manager: where it stands, what went wrong, and what you propose as next steps.",
+    "briefing": "You will summarize a stalled deal for your sales manager. Read the activity log before you start. Give the assistant all instructions by voice.",
+    "timeLimitMinutes": 8,
+    "materials": [
+      {
+        "title": "Deal",
+        "body": "Customer: regional wholesale distributor.\nValue: 80,000 EUR.\nStage: Negotiation.\nOriginal close date: Sep 30, 2026. Current close date: Dec 15, 2026."
+      },
+      {
+        "title": "Activity Log",
+        "body": "Jun 3 – Call: Discovery with Jens Möller (Head of Purchasing, champion). Strong interest, budget confirmed.\nJun 17 – Email: Proposal sent to Jens.\nJul 2 – Call: Jens asks for a lower price on the second-year license.\nJul 9 – Email: Revised proposal with 5% discount sent.\nAug 1 – Email: Jens confirms internal approval is in progress.\nAug 20 – Call: No answer. Voicemail left.\nSep 4 – Email: Auto-reply. Jens Möller has left the company.\nSep 12 – Call: Introduced to Petra Lang (new CFO). She was not involved before and wants to review all vendor contracts.\nSep 26 – Email: Petra asks for a comparison with two other vendors.\nOct 15 – Note: Close date moved to Dec 15. No reply from Petra to two follow-ups."
+      }
+    ],
+    "placeholderFields": ["task", "briefing", "materials"]
+  }
+]

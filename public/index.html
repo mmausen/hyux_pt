@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Study</title>
+  <link rel="stylesheet" href="/design-system/tokens.css">
+  <link rel="stylesheet" href="/design-system/components/bundle.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="fh-app" data-density="compact">
+  <div class="app" id="app">
+    <header class="fh-shellbar app-shellbar">
+      <span class="fh-shellbar__title" id="shell-title"></span>
+      <span class="fh-shellbar__secondary" id="shell-step"></span>
+      <span class="fh-shellbar__spacer"></span>
+      <span class="app-shellbar__round" id="shell-round"></span>
+    </header>
+    <div class="app-status" id="app-status" role="status" aria-live="polite"></div>
+    <main class="app-main" id="screen" tabindex="-1"></main>
+  </div>
+  <div class="app-small-screen" id="small-screen" role="alert" hidden></div>
+  <noscript>This study needs JavaScript.</noscript>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

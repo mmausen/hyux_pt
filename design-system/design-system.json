@@ -1,0 +1,25 @@
+{
+  "v": 3,
+  "layout": "files",
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-16T11:03:15Z"
+  },
+  "title": "Fiori Horizon",
+  "namespace": "FioriHorizon",
+  "libraries": [],
+  "sections": {},
+  "groups": [],
+  "assetGroups": {},
+  "blobs": {},
+  "docs": {
+    "readme": "project/README.md",
+    "sections": []
+  },
+  "lastChange": {
+    "by": "Claude",
+    "at": "2026-10-16T13:30:00Z",
+    "via": "Claude chat",
+    "note": "Added AI elements (SAP AI and Joule Design) and agent-first patterns with the Agent Workspace floorplan"
+  }
+}
