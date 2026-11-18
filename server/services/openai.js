@@ -2,8 +2,9 @@
 // Interface (shared with mock.js):
 //   transcribe({ buffer, mimetype, filename, signal }) -> { text }
 //   respond({ messages, onDelta, signal }) -> { text, usage }
-//   structured({ kind, instructions, input, schema, signal }) -> { data, usage, attempt?, attempts? }   (JSON that matches schema;
-//     kind 'extractIntents' | 'annotateIntent' only matters to the mock)
+//   structured({ kind, instructions, input, schema, signal, maxOutputTokens?, hedgeAfterSeconds?, context? })
+//     -> { data, usage, attempt?, attempts? }   (JSON that matches schema; maxOutputTokens and hedgeAfterSeconds
+//     default to ai.intents; kind and context only matter to the mock)
 //   health({ signal }) -> { ok, model }
 import OpenAI, { toFile } from 'openai';
 
@@ -92,8 +93,8 @@ export function createOpenAiService({ config, env }) {
     // Short calls the participant waits for (intents). Usually 2–3 s, but now and then one request takes
     // much longer at the API. So if no answer has come after ai.intents.hedgeAfterSeconds, a second,
     // identical request starts; the first answer wins and the other request is cancelled.
-    async structured({ instructions, input, schema, signal }) {
-      const params = requestParams(input, { stream: false, maxOutputTokens: config.ai.intents.maxOutputTokens, instructions });
+    async structured({ instructions, input, schema, signal, maxOutputTokens = config.ai.intents.maxOutputTokens, hedgeAfterSeconds = config.ai.intents.hedgeAfterSeconds }) {
+      const params = requestParams(input, { stream: false, maxOutputTokens, instructions });
       params.text = { format: { type: 'json_schema', name: 'result', schema, strict: true } };
       const once = async (sig) => {
         const res = await need().responses.create(params, { signal: sig });
@@ -101,7 +102,7 @@ export function createOpenAiService({ config, env }) {
         try { data = JSON.parse(res.output_text ?? ''); } catch { throw new Error('The model did not return valid JSON'); }
         return { data, usage: res.usage ?? null };
       };
-      const after = (config.ai.intents.hedgeAfterSeconds ?? 0) * 1000;
+      const after = (hedgeAfterSeconds ?? 0) * 1000;
       return after > 0 ? hedged(once, { signal, after }) : once(signal);
     },
 

@@ -59,6 +59,12 @@ export const api = {
     annotate: (round, id, text, signal) => request('POST', `/api/intents/${encodeURIComponent(id)}/annotate`, { json: { round, text }, signal }),
     setActive: (round, id, active) => request('PUT', `/api/intents/${encodeURIComponent(id)}`, { json: { round, active } }),
   },
+  // Compare mode (server/routes/compare.js).
+  compare: {
+    start: (round, signal) => request('POST', '/api/compare/start', { json: { round }, signal }),
+    next: (round, chosenId, text, signal) => request('POST', '/api/compare/next', { json: { round, chosenId, text }, signal }),
+    accept: (round, versionId) => request('POST', '/api/compare/accept', { json: { round, versionId } }),
+  },
   dev: {
     startSession: () => request('POST', '/api/dev/session', { json: {} }),
     setMock: (mock) => request('PUT', '/api/dev/mock', { json: mock }),

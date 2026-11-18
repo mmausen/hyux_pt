@@ -106,6 +106,15 @@ Each session has one interaction mode, set from `interaction.mode` in `config.js
 
 Only one recording runs at a time. While the assistant writes, the cards are locked. The task end waits for running transcriptions, intent extractions and changes. Intents are stored with the session (`rounds[round].intents`) and survive a reload.
 
+**`compare`** (branch `compare`). The participant never instructs the AI: they choose. Two similar versions stand side by side between the task (top) and the timer (bottom). No tutorial yet (the tutorial screen skips itself for a mode without `tutorialSteps`).
+
+1. **First pair.** `POST /api/compare/start` writes two versions from the outline (`scaffold`) and the situation (if `ai.compare.includeSituation`) that are alike except for two or three writing choices (`ai.compare.initialPrompt`).
+2. **Pick and say why.** The participant picks a version (**Pick This One**; they can switch), then holds the microphone in that card and says what they like most about it. **Show differences** highlights the words that differ between the two.
+3. **Next.** **Keep It, Show a New One** (`POST /api/compare/next`, `ai.compare.nextPrompt`) updates a hidden preference profile from the pick, the rejected version and what was said, and writes a new version from the pick: it keeps what the profile settles and varies one or two aspects it does not settle yet, more subtly as the profile grows. The kept version stays on its side, marked *Your last pick*; the other leaves and the new one (*New*) takes its place.
+4. **Accept.** **Accept as Final** marks the picked version as the result (`POST /api/compare/accept`) and asks to finish the task.
+
+The profile is never sent to the browser. Everything is stored with the session (`rounds[round].compare`: versions with their differences, the pair, the profile, every pick with the annotation and the profile before and after, the accepted version).
+
 ---
 
 ## Configuration reference
@@ -152,7 +161,7 @@ The tasks for a session are assigned when it starts and stored with it. Changing
 #### `interaction`
 | Option | Meaning |
 |---|---|
-| `mode` | Default interaction mode for new sessions (currently `'intents'`): a folder in `public/js/modes/` (`'voice'` or `'intents'`, see [Interaction modes](#interaction-modes)). The dev panel can switch the current session. |
+| `mode` | Default interaction mode for new sessions (currently `'compare'` on this branch): a folder in `public/js/modes/` (`'voice'`, `'intents'` or `'compare'`, see [Interaction modes](#interaction-modes)). The dev panel can switch the current session. |
 | `recordingMode` | `'pushToTalk'`: hold the button or the Space key. Space works only when focus isn't in a text field. `'toggle'`: select once to start and again to stop. The tutorial text follows this setting. |
 | `maxRecordingSeconds` | A recording stops automatically after this long and is transcribed. |
 
@@ -186,6 +195,10 @@ Participants see time only as a progress bar under the controls, with no countdo
 | `intents.annotatePrompt` | Intents mode: instructions for rewriting one intent from a spoken annotation. Gets the intent and its reason; returns JSON (`{ text, reason }`). |
 | `intents.reviseInstruction` | Intents mode: put before the active intents (with their reasons) and the latest draft when **Send** is selected. The draft is written with `systemPrompt` as usual. |
 | `intents.maxOutputTokens` | Upper limit for the intent calls. |
+| `compare.initialPrompt` | Compare mode: instructions for the first pair. Returns JSON (`{ a, b, differences }`). |
+| `compare.nextPrompt` | Compare mode: instructions for updating the hidden profile and writing the next version. Gets the profile, the picked and the rejected version, the annotation and the round; returns JSON (`{ profile, challenger, differences }`). |
+| `compare.includeSituation` | Compare mode: `true` gives the model the task's situation (facts), since the participant gives it none. The task itself is never sent. |
+| `compare.maxOutputTokens` | Compare mode: upper limit for its calls (the first one writes two full versions). |
 | `intents.hedgeAfterSeconds` | If an intent call (extract or change) has not answered after this many seconds, a second, identical request starts and the first answer is used. Intent calls usually take 2–3 s; this cuts the rare request that takes 20 s or more. `0` = off. The log shows `attempts` (requests started) and `attempt` (which one answered). |
 
 #### `stt` (speech-to-text)
@@ -410,6 +423,7 @@ Events (`server.*` and `session.*` come from the server; all others come from th
 | Recording | `recording.start`, `recording.stop` (duration, reason, size, format, peak level), `recording.error`. Intents mode: `target: 'instruction'` (first instruction), `'intents'` (new intents) or `'intent'` with `intentId` (a card's annotation); the same fields are on `transcript.*`. |
 | Transcription | `transcript.received` (length, latency), `transcript.empty`, `transcript.failed`, `draft.cleared` (the discarded text), `server.transcribe` (text, latency, size, format, audio file if stored) |
 | Intents | `scaffold.shown` (chars), `scaffold.failed`, `server.scaffold.shown` (**starting draft text**), `intents.extracted` (count, IDs, latency), `intents.extractFailed`, `intent.toggled` (ID, on/off, number on, state), `intent.toggleFailed`, `intent.quoteToggled` (ID, open), `intents.keptToggled` (open, count), `intent.annotated` (ID, latency), `intent.annotateFailed`, `server.intents.extracted` (**transcript, intent texts, reasons and quotes**), `server.intent.annotated` (**annotation, intent and reason before and after**) |
+| Compare | `compare.shown` (pair, resumed), `compare.picked` (version, side, round, switched, whether it was the kept one), `compare.noted`, `compare.noteCleared`, `compare.noteDiscarded`, `compare.next`, `compare.newVersion` (latency), `compare.nextFailed`, `compare.startFailed`, `compare.accepted`, `compare.diffToggled`, `server.compare.initial` (**both texts, differences**), `server.compare.next` (**pick, annotation, profile before and after, new text, differences**), `server.compare.accepted` (**final text, profile**). Recordings carry `target: 'compare'`. |
 | AI | `ai.sent` (length; intents mode: `step: 'first'` or `'intents'` with the intent IDs sent and the number switched off), `ai.received` (latency, first token; `resumed: true` if the response finished during a reload), `ai.failed`, `server.ai.request` (instruction, model, history length; intents mode: the intents sent, with their reasons), `server.ai.response` (**response text**, latency, token usage; `cleaned: true` and **`rawText`** when an introduction or closing comment of the model was removed) |
 | Questionnaire | `survey.submitted` (answers), `survey.externalOpened`, `survey.externalDone` |
 | End | `study.completed` |
@@ -461,7 +475,7 @@ design-system/            Fiori Horizon export (don't edit; tokens.css is genera
 server/
   index.js                Express app, security headers, static files
   config/                 load + validate config, client-safe subset
-  routes/                 session, transcribe/health, chat (streaming), intents, log, dev
+  routes/                 session, transcribe/health, chat (streaming), intents, compare, log, dev
   services/               OpenAI calls, mocks, session store, task assignment
   middleware/             session check, rate limiting
   logger/                 logger interface + JSONL implementation
@@ -473,6 +487,7 @@ public/
   js/screens/             one module per screen: { mount(container, ctx), unmount() }
   js/modes/voice/         voice interaction mode: canvas + tutorial steps
   js/modes/intents/       intents interaction mode: canvas + tutorial steps
+  js/modes/compare/       compare interaction mode: canvas (two versions) and word diff
 dev-client/devPanel.js    dev panel (served only in dev mode)
 scripts/build-tokens.mjs  generates design-system/tokens.css
 ```
