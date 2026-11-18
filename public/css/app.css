@@ -122,7 +122,10 @@ body.fh-app { background: var(--sapBackgroundColor); }
 /* ---------- Modal ---------- */
 .app-modal { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: var(--sapContent_Space_Small); }
 .app-modal .fh-blocklayer { position: absolute; }
-.app-briefing { width: 32rem; }
+.app-briefing { width: 40rem; max-width: 100%; }
+.app-briefing .fh-dialog__content { max-height: calc(100vh - 12rem); overflow-y: auto; }
+.app-briefing__block { display: flex; flex-direction: column; gap: 0.125rem; }
+.app-briefing__text { white-space: pre-line; margin: 0; }
 .app-briefing__limit { display: flex; flex-direction: column; gap: 0.125rem; }
 
 /* ---------- Timer ---------- */
@@ -145,8 +148,11 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .vc-task__head { display: flex; align-items: center; gap: var(--sapContent_Space_Small); }
 .vc-task__title { flex: 1; margin: 0; font-family: var(--font-bold); font-weight: 700; font-size: var(--sapFontHeader5Size); color: var(--sapTitleColor); }
 .vc-task__body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: var(--sapContent_Space_Medium); margin-top: var(--sapContent_Space_Tiny); }
+/* Situation collapsed: the task uses the full width. Open: task left, situation (and materials) right. */
+.vc-task__body:has(> .vc-task__details[hidden]) { grid-template-columns: minmax(0, 1fr); }
+.vc-task__details { display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); max-height: 40vh; overflow-y: auto; }
 .vc-task__label, .vc-instruction__label, .vc-turn__meta { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
-.vc-task__text { margin: 0.125rem 0 0; line-height: 1.5; }
+.vc-task__text { margin: 0.125rem 0 0; line-height: 1.5; white-space: pre-line; } /* blank line in the text = new paragraph */
 .vc-task__text--strong { font-family: var(--font-bold); font-weight: 700; color: var(--sapTitleColor); }
 .vc-materials { margin-top: var(--sapContent_Space_Small); padding-top: var(--sapContent_Space_Small); border-top: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor);
   display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: var(--sapContent_Space_Small); }

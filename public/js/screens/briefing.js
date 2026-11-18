@@ -38,8 +38,12 @@ export default function create() {
       dialog = openDialog({
         title: task.title,
         className: 'app-briefing',
+        // The whole scenario is read here, before the timer starts. During the task the situation is
+        // collapsed and can be opened again.
         content: h('div.app-form',
           task.briefing ? h('p.app-text', task.briefing) : null,
+          h('div.app-briefing__block', h('div.fh-attr__label', t('canvas.situationLabel')), h('p.app-text.app-briefing__text', task.situation)),
+          h('div.app-briefing__block', h('div.fh-attr__label', t('canvas.taskLabel')), h('p.app-text.app-briefing__text.vc-task__text--strong', task.task)),
           h('div.app-briefing__limit',
             h('span.fh-attr__label', t('briefing.timeLimit')),
             h('span.fh-attr__value.fh-attr__value--large', t('briefing.minutes', { minutes: task.timeLimitMinutes }))),

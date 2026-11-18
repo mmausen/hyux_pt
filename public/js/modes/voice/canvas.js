@@ -57,26 +57,30 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   const setFinalizing = (on) => conv.setBusy('finalize', on);
 
   // ----- task panel -----
+  // The task is always visible. The situation (and materials, if a task has any) is read in the briefing
+  // before the timer starts, so here it starts collapsed behind Show Situation to leave room for the
+  // conversation.
   const materials = Array.isArray(task?.materials) ? task.materials : [];
-  const materialsBody = h('div.vc-materials', { id: `vc-materials-${round}`, hidden: true },
-    materials.map((m) => h('section.vc-material', h('h3.vc-material__title', m.title), h('p.vc-material__body', m.body))));
-  const materialsBtn = materials.length && !conceal ? h('button.fh-btn.fh-btn--transparent', { type: 'button', 'aria-expanded': 'false', 'aria-controls': materialsBody.id },
-    icon('slim-arrow-down'), h('span', t('canvas.showMaterials'))) : null;
-  materialsBtn?.addEventListener('click', () => {
-    const open = materialsBody.hidden;
-    materialsBody.hidden = !open;
-    materialsBtn.setAttribute('aria-expanded', String(open));
-    materialsBtn.firstChild.dataset.icon = open ? 'slim-arrow-up' : 'slim-arrow-down';
-    materialsBtn.lastChild.textContent = t(open ? 'canvas.hideMaterials' : 'canvas.showMaterials');
-    if (live) logEvent(open ? 'materials.opened' : 'materials.closed', {});
+  const details = h('div.vc-task__details', { id: `vc-details-${round}`, hidden: true },
+    h('div.vc-task__block', h('div.vc-task__label', t('canvas.situationLabel')), h('p.vc-task__text', task?.situation ?? '')),
+    materials.length ? h('div.vc-materials',
+      materials.map((m) => h('section.vc-material', h('h3.vc-material__title', m.title), h('p.vc-material__body', m.body)))) : null);
+  const detailsBtn = conceal ? null : h('button.fh-btn.fh-btn--transparent', { type: 'button', 'aria-expanded': 'false', 'aria-controls': details.id },
+    icon('slim-arrow-down'), h('span', t('canvas.showSituation')));
+  detailsBtn?.addEventListener('click', () => {
+    const open = details.hidden;
+    details.hidden = !open;
+    detailsBtn.setAttribute('aria-expanded', String(open));
+    detailsBtn.firstChild.dataset.icon = open ? 'slim-arrow-up' : 'slim-arrow-down';
+    detailsBtn.lastChild.textContent = t(open ? 'canvas.hideSituation' : 'canvas.showSituation');
+    if (live) logEvent(open ? 'situation.opened' : 'situation.closed', {});
   });
 
   const taskPanel = h('section.vc-task', { 'aria-label': t('canvas.taskLabel'), dataset: { region: 'task' } },
-    h('div.vc-task__head', h('h1.vc-task__title', task?.title ?? ''), materialsBtn),
+    h('div.vc-task__head', h('h1.vc-task__title', task?.title ?? ''), detailsBtn),
     conceal ? null : h('div.vc-task__body',
       h('div.vc-task__block', h('div.vc-task__label', t('canvas.taskLabel')), h('p.vc-task__text.vc-task__text--strong', task?.task ?? '')),
-      h('div.vc-task__block', h('div.vc-task__label', t('canvas.situationLabel')), h('p.vc-task__text', task?.situation ?? ''))),
-    conceal ? null : materialsBody);
+      details));
 
   // ----- conversation -----
   const noticeSlot = h('div.vc-notices');

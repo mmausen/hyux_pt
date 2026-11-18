@@ -76,8 +76,8 @@ post:  end
 | **welcome** | The participant enters their ID, and the server checks it. A small or unsupported browser gets a notice here. |
 | **systemCheck** | Microphone permission, then a level meter. The participant reads the test sentence aloud, the recording is transcribed, and one short LLM call is made. Each check can be retried. After `retriesBeforeContact` failed retries, a contact text appears. |
 | **tutorial** | A guided tour over a sample canvas that highlights one area at a time. Then, if `tutorial.practiceTurn` is on, one real instruction is sent to the assistant. |
-| **briefing** | The task and its briefing are shown in a dialog over the canvas, with the task text hidden behind it. **Start Task** starts the timer. |
-| **task** | The main canvas. The participant records an instruction, checks the transcript, and sends it. The assistant's response appears, and the participant keeps going until they select **Finish Task** or time runs out. |
+| **briefing** | A dialog over the canvas shows the full scenario (situation and task) and the recommended time limit, so reading does not count toward task time. The task text behind it is hidden. **Start Task** starts the timer. |
+| **task** | The main canvas. The task panel shows the title and the task; **Show Situation** expands the situation (and any materials) again. The participant records an instruction, checks the transcript, and sends it. The assistant's response appears, and the participant keeps going until they select **Finish Task** or time runs out. |
 | **survey** | The questionnaire about the task, either built in or a link to an external tool. |
 | **interview** | "Conversation Review": a read-only view of the task and every turn with timestamps, to look at together with the interviewer. Off by default. |
 | **end** | Marks the session complete and shows the completion code, if one is set. |
@@ -234,8 +234,10 @@ Tasks are in `data/tasks.json`:
 ```
 
 - `id`, `title`, `situation`, `task` and `timeLimitMinutes` are required. `briefing` may be an empty string. `materials` is optional.
-- Materials appear behind **Show Materials** in the task panel.
-- `placeholderFields` (optional) is only a note for authors. It marks fields that still hold generated placeholder text. The three current tasks have placeholder `task`, `briefing` and `materials`, so replace them with the real content.
+- The briefing shows `situation` and `task` in full. During the task only `title` and `task` are visible; the situation and any materials appear behind **Show Situation**.
+- Use a blank line (`\n\n`) in `situation` to separate paragraphs. Line breaks are kept.
+- The layout is checked for a situation of about 120 words and a task of about 40 words, at 1024×768 and larger. Much longer texts still work but scroll.
+- `placeholderFields` (optional) is only a note for authors. It marks fields that still hold generated placeholder text.
 - To use the new task, add its ID to `flow.taskSelection.order` (or to `perParticipant` lists) and, if needed, raise `flow.rounds`. Then restart and run `npm run check:config`.
 
 The browser receives only the tasks assigned to the current session.
@@ -376,7 +378,7 @@ Events (`server.*` and `session.*` come from the server; all others come from th
 | Steps | `step.entered`, `step.left` (with reason), `step.error` |
 | System check | `systemCheck.check` (each check and its result), `systemCheck.passed`, `recording.*` with `context: 'systemCheck'` |
 | Tutorial | `tutorial.started`, `tutorial.step`, `tutorial.tourCompleted`, `tutorial.practiceStarted`, `tutorial.practiceTurn`, `tutorial.completed` |
-| Task | `task.started`, `task.finishRequested`, `task.finishCancelled`, `task.finished` (reason, elapsed time, turns) |
+| Task | `task.started`, `situation.opened`, `situation.closed`, `task.finishRequested`, `task.finishCancelled`, `task.finished` (reason, elapsed time, turns) |
 | Timer | `timer.warning`, `timer.limit`, `timer.graceEnd` |
 | Recording | `recording.start`, `recording.stop` (duration, reason, size, format, peak level), `recording.error` |
 | Transcription | `transcript.received` (length, latency), `transcript.empty`, `transcript.failed`, `draft.cleared` (the discarded text), `server.transcribe` (text, latency, size, format, audio file if stored) |

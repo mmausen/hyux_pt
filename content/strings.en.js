@@ -110,8 +110,8 @@ export default {
   canvas: {
     taskLabel: 'Your Task',
     situationLabel: 'Situation',
-    showMaterials: 'Show Materials',
-    hideMaterials: 'Hide Materials',
+    showSituation: 'Show Situation',
+    hideSituation: 'Hide Situation',
     conversationLabel: 'Conversation with the assistant',
     instructionLabel: 'Your Instruction',
     draftLabel: 'Current Instruction',
@@ -167,7 +167,7 @@ export default {
     startPractice: 'Try It Out',
     finish: 'Finish Tutorial',
     voice: {
-      task: { title: 'Your Task', text: 'The task and its situation are always shown at the top. Some tasks have materials, such as notes or an activity log. Select Show Materials to read them.' },
+      task: { title: 'Your Task', text: 'Your task is always shown at the top. Before each task you read its situation; during the task, select Show Situation to read it again.' },
       recordPushToTalk: { title: 'Record an Instruction', text: 'Hold this button, or the Space key, while you speak. Release it when you are done. You can record several times; each recording is added to your instruction.' },
       recordToggle: { title: 'Record an Instruction', text: 'Select this button to start recording and select it again when you are done. You can record several times; each recording is added to your instruction.' },
       transcript: { title: 'Check Your Instruction', text: 'Your recording is converted to text here. You cannot type. If something went wrong, select Clear and record again.' },
