@@ -59,6 +59,11 @@ export const api = {
     annotate: (round, id, text, signal) => request('POST', `/api/intents/${encodeURIComponent(id)}/annotate`, { json: { round, text }, signal }),
     setActive: (round, id, active) => request('PUT', `/api/intents/${encodeURIComponent(id)}`, { json: { round, active } }),
   },
+  // Slider mode (server/routes/slider.js). Writing a version is /api/chat with { sliders }.
+  slider: {
+    start: (round) => request('POST', '/api/slider/start', { json: { round } }),
+    voice: (round, text, signal) => request('POST', '/api/slider/voice', { json: { round, text }, signal }),
+  },
   dev: {
     startSession: () => request('POST', '/api/dev/session', { json: {} }),
     setMock: (mock) => request('PUT', '/api/dev/mock', { json: mock }),

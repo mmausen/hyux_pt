@@ -27,9 +27,14 @@ export function createMockService({ config }) {
       if (purpose === 'systemCheck') return { text: config.systemCheck.testSentence };
       return { text: TRANSCRIPTS[t++ % TRANSCRIPTS.length] };
     },
-    async respond({ onDelta, signal }) {
+    async respond({ messages = [], onDelta, signal }) {
       await sleep(latency(), signal);
-      const text = RESPONSES[r++ % RESPONSES.length];
+      // Slider mode: a text that follows from the decisions, so moving a slider changes it visibly.
+      const input = String(messages.at(-1)?.content ?? '');
+      const decisions = (input.split('Decisions:\n')[1] ?? '').split('\n\n')[0].trim();
+      const text = decisions
+        ? `Dear [Name of the CFO],\n\n${decisions.split('\n').map((l) => `This proposal is ${l.replace(/^- /, '').replace(/ \(“.*?”\):/, ':')}.`).join('\n\n')}\n\nKind regards,\n[Your name]`
+        : RESPONSES[r++ % RESPONSES.length];
       if (onDelta) {
         for (const chunk of text.match(/\S+\s*/g) ?? []) {
           await sleep(25, signal);
@@ -41,8 +46,14 @@ export function createMockService({ config }) {
     // Intents without an LLM: one intent per sentence or "and"-clause of the comment (the part after
     // "because" or a comma is its reason); an annotation is appended to the intent. Good enough to
     // click through the intents mode.
-    async structured({ kind, input, signal }) {
+    async structured({ kind, input, context = {}, signal }) {
       await sleep(latency(), signal);
+      // Slider mode: "remove"/"delete"/"drop" removes the last slider; anything else creates a Tone slider.
+      if (kind === 'sliderVoice') {
+        const last = context.sliders?.at(-1);
+        if (/\b(remove|delete|drop|get rid)\b/i.test(context.text ?? '') && last) return { data: { action: 'remove', id: last.id, theme: '', a: '', b: '' }, usage: null };
+        return { data: { action: 'create', id: '', theme: 'Tone', a: 'Formal and reserved', b: 'Warm and personal' }, usage: null };
+      }
       const text = String(input.at(-1)?.content ?? '');
       const said = (label) => (text.split(`${label}:\n`)[1] ?? '').split('\n\n')[0].trim();
       const short = (s) => s.split(/\s+/).slice(0, 12).join(' ').replace(/[.,;:]+$/, '');

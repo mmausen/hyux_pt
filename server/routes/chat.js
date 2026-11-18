@@ -2,18 +2,24 @@
 // earlier turns of the same round (if config.ai.sendHistory) and the new transcript. Never the task.
 // Intents mode: { round, intentIds } instead of text. The model then gets no history, only the latest
 // draft and the listed intents (config.ai.intents.reviseInstruction); the turn records which intents.
+// Slider mode: { round, sliders: [{ id, value }] } instead of text. The model gets no history, only the
+// decisions (config.ai.slider.writeInstruction), the situation (if ai.slider.includeSituation) and the
+// starting draft or, after it, the previous version with what changed (ai.slider.anchorInstruction).
+// The same decisions in the same positions give the same text again: a cached version is returned
+// without asking the model (turn.cachedFrom), so every difference comes from moving a slider.
 // The server owns the conversation: turns are stored in session.rounds[round].turns.
 // Response: NDJSON stream of {type:'delta', text} … then {type:'done', turn} or {type:'error', error}.
 import { Router } from 'express';
 import { requireSession, useMock } from '../middleware/session.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { latestDraft } from './intents.js';
+import { activeSliders, describe, changes, cacheKey, POSITIONS, BALANCED } from '../services/sliders.js';
 import { cleanResponse } from '../../public/js/core/cleanResponse.js';
 
 const MAX_CHARS = 4000;
 
 export function chatRoutes(app) {
-  const { config, env, store, logger, ai, mock } = app;
+  const { config, env, store, logger, ai, mock, tasksById } = app;
   const r = Router();
   const limit = rateLimit({
     name: 'chat',
@@ -27,9 +33,10 @@ export function chatRoutes(app) {
     const round = req.body?.round;
     let text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
     const intentIds = Array.isArray(req.body?.intentIds) ? req.body.intentIds : null;
+    const sliderValues = Array.isArray(req.body?.sliders) ? req.body.sliders : null;
     // Round 0 is the tutorial practice turn; rounds 1..N are tasks.
     if (!Number.isInteger(round) || round < 0 || round > session.plan.length) return res.status(400).json({ error: 'bad_round' });
-    if (!intentIds && !text) return res.status(400).json({ error: 'empty' });
+    if (!intentIds && !sliderValues && !text) return res.status(400).json({ error: 'empty' });
     if (text.length > MAX_CHARS) return res.status(413).json({ error: 'too_long' });
 
     const key = String(round);
@@ -40,7 +47,30 @@ export function chatRoutes(app) {
     let history;
     let input;
     let intents = null;
-    if (intentIds) {
+    let settings = null;
+    let cached = null;
+    let sliderKey = null;
+    if (sliderValues) {
+      // Every active slider with its position (balanced if the browser sent none).
+      settings = activeSliders(roundData).map(({ id, theme, a, b }) => {
+        const v = sliderValues.find((x) => x?.id === id)?.value;
+        return { id, theme, a, b, value: Number.isInteger(v) && v >= 0 && v < POSITIONS ? v : BALANCED };
+      });
+      const prev = [...roundData.turns].reverse().find((t) => t.status === 'done');
+      if (!settings.length || !prev) return res.status(400).json({ error: 'no_sliders' });
+      text = describe(settings);
+      history = [];
+      sliderKey = cacheKey(settings);
+      const hit = roundData.sliderCache?.[sliderKey];
+      cached = hit ? roundData.turns.find((t) => t.n === hit && t.status === 'done') ?? null : null;
+      const situation = config.ai.slider.includeSituation ? tasksById.get(roundData.taskId)?.situation ?? '' : '';
+      const parts = [config.ai.slider.writeInstruction];
+      if (situation) parts.push(`Situation:\n${situation}`);
+      parts.push(`Decisions:\n${text}`);
+      if (prev.kind === 'slider') parts.push(`Changed decisions since the previous version:\n${changes(prev.sliders ?? [], settings) || '- none'}`, `Previous version:\n${prev.response}`, config.ai.slider.anchorInstruction);
+      else parts.push(`Outline to write from:\n${prev.response}`);
+      input = parts.join('\n\n');
+    } else if (intentIds) {
       // Intents: the latest draft and the chosen intents, nothing else.
       const draft = latestDraft(roundData);
       intents = (roundData.intents ?? []).filter((x) => intentIds.includes(x.id));
@@ -61,12 +91,14 @@ export function chatRoutes(app) {
     }
     const turn = { n: roundData.turns.length + 1, transcript: text, response: '', status: 'pending', sentAt: new Date().toISOString() };
     if (intents) turn.intents = intents.map(({ id, text: t, reason }) => ({ id, text: t, reason: reason ?? '' }));
+    if (settings) Object.assign(turn, { kind: 'slider', sliders: settings });
+    if (cached) turn.cachedFrom = cached.n;
     roundData.turns.push(turn);
     await store.update(session, (s) => { s.rounds[key] = roundData; });
 
     const service = useMock(req, env, 'llm') ? mock : ai;
     const log = logger.forSession(session, round);
-    log.write('server.ai.request', { turn: turn.n, model: service === mock ? 'mock' : config.ai.model, historyTurns: history.length / 2, chars: text.length, text, intents: turn.intents });
+    log.write('server.ai.request', { turn: turn.n, model: cached ? 'cache' : service === mock ? 'mock' : config.ai.model, historyTurns: history.length / 2, chars: text.length, text, intents: turn.intents, sliders: turn.sliders, cachedFrom: turn.cachedFrom });
 
     res.status(200);
     res.set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
@@ -79,21 +111,23 @@ export function chatRoutes(app) {
     let firstTokenMs = null;
     try {
       // The request is not aborted when the browser disconnects: the turn is still stored, so a reload shows it.
-      const out = await service.respond({
+      const out = cached ? { text: cached.response, usage: null } : await service.respond({
         messages: [...history, { role: 'user', content: input }],
         onDelta: (d) => { if (firstTokenMs === null) firstTokenMs = Date.now() - started; send({ type: 'delta', text: d }); },
         signal: AbortSignal.timeout(config.ai.timeoutSeconds * 1000),
       });
       // Only the text itself is kept as the response: an introduction or closing comment of the model is
       // removed (the raw text is kept in rawResponse and logged).
-      const response = cleanResponse(out.text) || out.text;
+      if (cached) { firstTokenMs = 0; send({ type: 'delta', text: out.text }); }
+      const response = cached ? out.text : cleanResponse(out.text) || out.text;
       if (response !== out.text) turn.rawResponse = out.text;
       Object.assign(turn, { response, status: 'done', respondedAt: new Date().toISOString(), latencyMs: Date.now() - started, firstTokenMs, usage: out.usage ?? undefined, mock: service === mock || undefined });
       for (const x of intents ?? []) x.sentIn = [...(x.sentIn ?? []), turn.n];
+      if (sliderKey && !cached) (roundData.sliderCache ??= {})[sliderKey] = turn.n;
       await store.update(session, () => {});
       log.write('server.ai.response', {
         turn: turn.n, latencyMs: turn.latencyMs, firstTokenMs, chars: response.length, text: response,
-        ...(turn.rawResponse ? { cleaned: true, rawText: out.text } : {}), usage: out.usage ?? null,
+        ...(turn.rawResponse ? { cleaned: true, rawText: out.text } : {}), usage: out.usage ?? null, cachedFrom: turn.cachedFrom,
       });
       send({ type: 'done', turn });
     } catch (e) {

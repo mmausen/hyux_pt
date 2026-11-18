@@ -6,7 +6,24 @@
     "task": "Write a compelling renewal proposal to the CFO arguing why the hospital network should renew. Make the case for how the platform supports staff wellbeing, improves scheduling efficiency, helps retain nurses and, in the end, contributes to better patient care.",
     "scaffold": "Subject: [Subject line]\n\nDear [Name of the CFO],\n\n[Opening: why you are writing and what this letter covers.]\n\nCurrent Agreement\n[Scope of the current contract and the renewal date.]\n\nHow the Platform Is Used Today\n[How the teams in the hospital network use the platform.]\n\nValue for the Hospital Network\n[Staff wellbeing.]\n[Scheduling efficiency.]\n[Nurse retention.]\n[Patient care.]\n\nCommercial Terms\n[The terms of the renewal.]\n\nNext Steps\n[What happens next and by when.]\n\nKind regards,\n[Your name]\n[Your role]",
     "briefing": "",
-    "timeLimitMinutes": 7
+    "timeLimitMinutes": 7,
+    "sliders": [
+      {
+        "theme": "Selling Pace",
+        "a": "Close fast, apply pressure",
+        "b": "Take it slow, build trust"
+      },
+      {
+        "theme": "Licences and Price",
+        "a": "Full renewal at full price",
+        "b": "Right-size licences, lower price"
+      },
+      {
+        "theme": "Core Argument",
+        "a": "Hard numbers and savings",
+        "b": "Nurses, wellbeing and patients"
+      }
+    ]
   },
   {
     "id": "task-02",
@@ -15,7 +32,24 @@
     "task": "Write a compelling renewal proposal to the CFO arguing why the hospital network should renew. Make the case for how the platform supports staff wellbeing, improves scheduling efficiency, helps retain nurses and, in the end, contributes to better patient care.",
     "scaffold": "Subject: [Subject line]\n\nDear [Name of the CFO],\n\n[Opening: why you are writing and what this letter covers.]\n\nCurrent Agreement\n[Scope of the current contract and the renewal date.]\n\nHow the Platform Is Used Today\n[How the teams in the hospital network use the platform.]\n\nValue for the Hospital Network\n[Staff wellbeing.]\n[Scheduling efficiency.]\n[Nurse retention.]\n[Patient care.]\n\nCommercial Terms\n[The terms of the renewal.]\n\nNext Steps\n[What happens next and by when.]\n\nKind regards,\n[Your name]\n[Your role]",
     "briefing": "",
-    "timeLimitMinutes": 7
+    "timeLimitMinutes": 7,
+    "sliders": [
+      {
+        "theme": "Selling Pace",
+        "a": "Close fast, apply pressure",
+        "b": "Take it slow, build trust"
+      },
+      {
+        "theme": "Licences and Price",
+        "a": "Full renewal at full price",
+        "b": "Right-size licences, lower price"
+      },
+      {
+        "theme": "Core Argument",
+        "a": "Hard numbers and savings",
+        "b": "Nurses, wellbeing and patients"
+      }
+    ]
   },
   {
     "id": "task-03",
@@ -24,6 +58,23 @@
     "task": "Write a compelling renewal proposal to the CFO arguing why the hospital network should renew. Make the case for how the platform supports staff wellbeing, improves scheduling efficiency, helps retain nurses and, in the end, contributes to better patient care.",
     "scaffold": "Subject: [Subject line]\n\nDear [Name of the CFO],\n\n[Opening: why you are writing and what this letter covers.]\n\nCurrent Agreement\n[Scope of the current contract and the renewal date.]\n\nHow the Platform Is Used Today\n[How the teams in the hospital network use the platform.]\n\nValue for the Hospital Network\n[Staff wellbeing.]\n[Scheduling efficiency.]\n[Nurse retention.]\n[Patient care.]\n\nCommercial Terms\n[The terms of the renewal.]\n\nNext Steps\n[What happens next and by when.]\n\nKind regards,\n[Your name]\n[Your role]",
     "briefing": "",
-    "timeLimitMinutes": 7
+    "timeLimitMinutes": 7,
+    "sliders": [
+      {
+        "theme": "Selling Pace",
+        "a": "Close fast, apply pressure",
+        "b": "Take it slow, build trust"
+      },
+      {
+        "theme": "Licences and Price",
+        "a": "Full renewal at full price",
+        "b": "Right-size licences, lower price"
+      },
+      {
+        "theme": "Core Argument",
+        "a": "Hard numbers and savings",
+        "b": "Nurses, wellbeing and patients"
+      }
+    ]
   }
 ]
