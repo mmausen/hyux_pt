@@ -149,7 +149,7 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .vc-task__title { flex: 1; margin: 0; font-family: var(--font-bold); font-weight: 700; font-size: var(--sapFontHeader5Size); color: var(--sapTitleColor); }
 .vc-task__body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: var(--sapContent_Space_Medium); margin-top: var(--sapContent_Space_Tiny); }
 /* Situation collapsed: the task uses the full width. Open: task left, situation (and materials) right. */
-.vc-task__body:has(> .vc-task__details[hidden]) { grid-template-columns: minmax(0, 1fr); }
+.vc-task__body[hidden] { display: none; } /* collapsed: only the title row */
 .vc-task__details { display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); max-height: 40vh; overflow-y: auto; }
 .vc-task__label, .vc-instruction__label, .vc-turn__meta { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
 .vc-task__text { margin: 0.125rem 0 0; line-height: 1.5; white-space: pre-line; } /* blank line in the text = new paragraph */
