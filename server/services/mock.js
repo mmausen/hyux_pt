@@ -6,9 +6,10 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
 
 const TRANSCRIPTS = [
   'Write a short email to the customer that picks up where our last conversation ended.',
+  'Write in a casual tone, because we have a long-standing relationship.',
   'Make it more personal and mention the concern about implementation effort.',
-  'Shorten it to five sentences and end with a clear question.',
-  'Change the tone to be a bit more confident.',
+  'Make the tone of the email more professional.',
+  'Actually, shorten the email to five sentences.',
 ];
 
 const RESPONSES = [
@@ -38,42 +39,60 @@ export function createMockService({ config }) {
       }
       return { text, usage: null };
     },
-    // Intents without an LLM. Synthesis: one request per sentence or "and"-clause of the comment (the
-    // part after "because" or a comma is its reason), sorted into a topic by keywords; a request that
-    // shares a longer word with an intent of the same topic, or finds its topic full, is merged into that
-    // intent; the other current intents stay as they are. An annotation is appended to the intent. Good
-    // enough to click through the intents mode.
+    // Intents without an LLM, good enough to click through the intents mode.
+    // Collect: one intent per sentence or "and"-clause of the comment (the part after "because" or a
+    // comma is its reason), placed in a group by keywords. A comment that starts with "actually",
+    // "instead" or "no" revises the current intent of that group it shares a word with; "forget" or
+    // "drop" takes it back. Structure: intents of a group that share a word are combined into one; the
+    // rest stays. An annotation is appended to the intent.
     async structured({ kind, input, signal }) {
       await sleep(latency(), signal);
       const text = String(input.at(-1)?.content ?? '');
       const said = (label) => (text.split(`${label}:\n`)[1] ?? '').split('\n\n')[0].trim();
       const short = (s, n = 12) => s.split(/\s+/).slice(0, n).join(' ').replace(/[.,;:]+$/, '');
       const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+      const json = (label) => { try { return JSON.parse(said(label) || '[]'); } catch { return []; } };
+      const words = (s) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+      const shares = (a, b) => [...words(a)].some((w) => words(b).has(w));
       if (kind === 'annotateIntent') {
         const reason = said('Reason');
         return { data: { text: cap(short(`${said('Intent')}, ${said('Annotation')}`)), reason: reason === '(none given)' ? '' : reason }, usage: null };
       }
-      let current = [];
-      try { current = JSON.parse(said('Current intents') || '[]'); } catch { current = []; }
-      const topicFor = (p) => (/tone|formal|friendl|personal|confiden|warm|polite/i.test(p) ? 'tone'
-        : /shorten|shorter|longer|order|end with|start with|opening|closing|paragraph|sentences|structure/i.test(p) ? 'structure'
-          : /mention|number|figure|date|price list|attach|question|call/i.test(p) ? 'details'
-            : /cost|value|benefit|price|argu|case|retain|save|concern/i.test(p) ? 'mainArguments' : 'secondaryArguments');
-      const words = (s) => new Set(s.toLowerCase().match(/[a-z]{5,}/g) ?? []);
-      const out = current.map((x) => ({ id: x.id, mergedFrom: [], topic: x.topic || topicFor(x.text), text: x.text, reason: x.reason, quote: '' }));
-      const parts = said('New comment').split(/(?<=[.!?])\s+|,?\s+and\s+(?:also\s+)?/i).map((s) => s.trim()).filter((s) => s.split(/\s+/).length >= 2);
+      if (kind === 'structureIntents') {
+        const list = json('Intents that are on');
+        const out = [];
+        for (const x of list) {
+          const into = out.find((y) => y.group === x.group && shares(y.text, x.text) && y.text.length + x.text.length < 120);
+          if (into) {
+            Object.assign(into, { text: cap(short(`${x.text} while keeping ${into.text.charAt(0).toLowerCase()}${into.text.slice(1)}`, 15)), reason: into.reason || x.reason });
+            into.mergedFrom.push(x.id);
+          } else out.push({ id: x.id, mergedFrom: [], group: x.group, text: x.text, reason: x.reason, nuance: x.nuance });
+        }
+        return { data: { groups: [...new Set(out.map((x) => x.group))], intents: out }, usage: null };
+      }
+      const current = json('Current intents');
+      const groupFor = (p) => (/tone|formal|casual|friendl|personal|confiden|warm|polite/i.test(p) ? 'Tone'
+        : /shorten|shorter|longer|order|end with|start with|opening|closing|paragraph|sentences|structure/i.test(p) ? 'Structure'
+          : /mention|number|figure|date|price list|attach|question|call/i.test(p) ? 'Details'
+            : /cost|value|benefit|price|argu|case|retain|save|concern|continuity/i.test(p) ? 'Main arguments' : 'Supporting arguments');
+      const comment = said('New comment');
+      const data = { added: [], revised: [], removed: [] };
+      const revising = /^(actually|instead|no[,.]?)\b/i.test(comment);
+      const dropping = /^(forget|drop)\b/i.test(comment);
+      if (revising || dropping) {
+        const body = comment.replace(/^(actually|instead|no|forget|drop)[,.]?\s*/i, '');
+        const hit = current.find((x) => x.group === groupFor(body) && shares(x.text, body)) ?? current.find((x) => shares(x.text, body));
+        if (hit && dropping) { data.removed.push(hit.id); return { data, usage: null }; }
+        if (hit) { data.revised.push({ id: hit.id, mergedFrom: [], group: hit.group, text: cap(short(body)), reason: hit.reason, nuance: hit.nuance, quote: comment }); return { data, usage: null }; }
+      }
+      const parts = comment.split(/(?<=[.!?])\s+|,?\s+and\s+(?:also\s+)?/i).map((s) => s.trim()).filter((s) => s.split(/\s+/).length >= 2);
       for (const p of parts.slice(0, 3)) {
         // "X because Y" or "X, Y": Y is the reason.
         const [, ask = p, why = ''] = p.match(/^(.+?)(?:,?\s+because\s+|,\s+)(.+)$/i) ?? [];
-        const reason = why ? cap(short(why.replace(/[.!?]+$/, ''))) : '';
-        const topic = topicFor(p);
-        const same = out.filter((x) => x.topic === topic);
-        const near = same.find((x) => [...words(ask)].some((w) => words(x.text).has(w)))
-          ?? (same.length >= config.ai.intents.maxPerTopic ? same.at(-1) : null);
-        if (near) Object.assign(near, { text: cap(short(`${near.text} and ${ask.charAt(0).toLowerCase()}${ask.slice(1)}`, 15)), reason: near.reason || reason, quote: p });
-        else out.push({ id: '', mergedFrom: [], topic, text: cap(short(ask)), reason, quote: p });
+        const nuance = /subtl|in passing|implicit/i.test(p) ? 'implicit' : '';
+        data.added.push({ group: groupFor(p), text: cap(short(ask)), reason: why ? cap(short(why.replace(/[.!?]+$/, ''))) : '', nuance, quote: p });
       }
-      return { data: { intents: out, removed: [] }, usage: null };
+      return { data, usage: null };
     },
 
     async health({ signal }) {

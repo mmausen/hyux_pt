@@ -2,7 +2,7 @@
 // interaction mode uses this for sending instructions, streaming responses, picking up a response that
 // was still being written before a reload, and telling the task screen when nothing is running.
 //
-//   const conv = createConversation(ctx, { round, live, sample, onUpdate, onDelta, onTurn });
+//   const conv = createConversation(ctx, { round, live, sample, onUpdate, onDelta, onTurn, onEvent });
 //   live=false: display only (briefing backdrop, tutorial); sample: example turns for the tutorial
 //   conv.turns            finished turns [{ n, transcript, response, sentAt, respondedAt, ... }]
 //   conv.inflight         the turn being answered right now, or null
@@ -16,6 +16,7 @@
 // onUpdate()          state changed: re-render
 // onDelta(response)   streaming text so far, for a cheap partial update
 // onTurn(turn, { resumed })  a response finished (resumed: it was pending before a reload)
+// onEvent(msg)        another message of the response stream (intents mode: the structured intents)
 //
 // The server stores every turn (session.rounds[round].turns); a turn's instruction field is called
 // `transcript` for historical reasons, whatever the mode.
@@ -29,7 +30,7 @@ let unloading = false;
 addEventListener('beforeunload', () => { unloading = true; });
 addEventListener('pagehide', () => { unloading = true; });
 
-export function createConversation(ctx, { round, live = true, sample = null, onUpdate = () => {}, onDelta = () => {}, onTurn = null }) {
+export function createConversation(ctx, { round, live = true, sample = null, onUpdate = () => {}, onDelta = () => {}, onTurn = null, onEvent = null }) {
   const { config, session } = ctx;
   const serverTurns = () => session.data?.rounds?.[String(round)]?.turns ?? [];
 
@@ -72,6 +73,7 @@ export function createConversation(ctx, { round, live = true, sample = null, onU
           inflight.response += d;
           onDelta(inflight.response);
         },
+        onEvent(msg) { if (!destroyed) onEvent?.(msg); },
       });
       if (destroyed) return null;
       turns.push(turn);

@@ -88,15 +88,14 @@ export function validateConfig(config, { tasks, modes, hasApiKey, devMode }) {
   num('ai.maxOutputTokens', { min: 16, max: 128000, int: true });
   bool('ai.sendHistory');
   num('ai.timeoutSeconds', { min: 5, max: 600 });
-  str('ai.intents.synthesizePrompt'); str('ai.intents.annotatePrompt'); str('ai.intents.composeInstruction');
+  str('ai.intents.collectPrompt'); str('ai.intents.structurePrompt'); str('ai.intents.annotatePrompt'); str('ai.intents.composeInstruction');
   num('ai.intents.maxOutputTokens', { min: 64, max: 32000, int: true });
-  num('ai.intents.synthesizeMaxOutputTokens', { min: 256, max: 32000, int: true });
-  num('ai.intents.maxPerTopic', { min: 1, max: 10, int: true });
-  num('ai.intents.maxIntents', { min: 1, max: 40, int: true });
-  const topics = get('ai.intents.topics');
-  if (!Array.isArray(topics) || !topics.length || topics.some((x) => !/^[A-Za-z][A-Za-z0-9]*$/.test(x?.key ?? '') || typeof x.label !== 'string' || !x.label.trim() || typeof x.about !== 'string')) {
-    err('ai.intents.topics', 'must be a list of { key, label, about }; key is letters and digits, starting with a letter');
-  } else if (new Set(topics.map((x) => x.key)).size !== topics.length) err('ai.intents.topics', 'keys must be unique');
+  num('ai.intents.collectMaxOutputTokens', { min: 256, max: 32000, int: true });
+  num('ai.intents.structureMaxOutputTokens', { min: 256, max: 32000, int: true });
+  const groups = get('ai.intents.suggestedGroups');
+  if (!Array.isArray(groups) || !groups.length || groups.some((x) => typeof x?.name !== 'string' || !x.name.trim() || typeof x.about !== 'string')) {
+    err('ai.intents.suggestedGroups', 'must be a list of { name, about }');
+  }
   num('ai.intents.hedgeAfterSeconds', { min: 0, max: 600 });
 
   // stt

@@ -55,7 +55,8 @@ export const api = {
   // Intent cards of the intents mode (server/routes/intents.js).
   intents: {
     start: (round) => request('POST', '/api/intents/start', { json: { round } }),
-    synthesize: (round, text, signal) => request('POST', '/api/intents/synthesize', { json: { round, text }, signal }),
+    collect: (round, text, signal) => request('POST', '/api/intents/collect', { json: { round, text }, signal }),
+    undo: (round, token) => request('POST', '/api/intents/undo', { json: { round, token } }),
     annotate: (round, id, text, signal) => request('POST', `/api/intents/${encodeURIComponent(id)}/annotate`, { json: { round, text }, signal }),
     setActive: (round, id, active) => request('PUT', `/api/intents/${encodeURIComponent(id)}`, { json: { round, active } }),
     remove: (round, id) => request('DELETE', `/api/intents/${encodeURIComponent(id)}`, { json: { round } }),

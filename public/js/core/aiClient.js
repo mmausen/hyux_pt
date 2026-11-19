@@ -3,7 +3,8 @@ import { getSessionId, ApiError } from './api.js';
 
 // Returns the stored turn { n, transcript, response, sentAt, respondedAt, ... }.
 // body: extra request fields, e.g. { intentIds } in the intents mode (see server/routes/chat.js).
-export async function sendChat({ round, text, body = {}, onDelta, signal }) {
+// onEvent(msg): any other message of the stream (intents mode: {type:'structuring'}, {type:'intents', …}).
+export async function sendChat({ round, text, body = {}, onDelta, onEvent, signal }) {
   let res;
   try {
     res = await fetch('/api/chat', {
@@ -43,6 +44,7 @@ export async function sendChat({ round, text, body = {}, onDelta, signal }) {
       if (msg.type === 'delta') onDelta?.(msg.text);
       else if (msg.type === 'done') return msg.turn;
       else if (msg.type === 'error') throw new ApiError(502, msg.error);
+      else onEvent?.(msg);
     }
   }
   throw new ApiError(0, 'network', 'stream ended early');

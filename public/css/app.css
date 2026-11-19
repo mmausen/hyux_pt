@@ -279,6 +279,12 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .ic-group__count { font-family: var(--font-sans); font-weight: 400; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
 .ic-group__mark { width: 0.375rem; height: 0.375rem; border-radius: 50%; background: var(--sapInformativeElementColor, var(--sapHighlightColor)); flex: none; }
 .ic-status { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
+.ic-undo { display: flex; align-items: center; gap: var(--sapContent_Space_Tiny); font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
+.ic-undo__btn { min-height: 1.5rem; padding-inline: 0.375rem; }
+.ic-card__nuance {
+  align-self: flex-start; padding: 0 0.375rem; border-radius: 0.5rem; font-size: var(--sapFontSmallSize); line-height: 1.4;
+  color: var(--sapTextColor); background: color-mix(in srgb, var(--ic-c, var(--sapNeutralElementColor)) 14%, var(--sapTile_Background));
+}
 .ic-hint { margin: 0; font-size: var(--sapFontSmallSize); color: var(--sapCriticalTextColor); }
 .ic-row {
   display: grid; grid-auto-flow: column; grid-auto-columns: minmax(15rem, 19rem); align-items: start; gap: var(--sapContent_Space_Tiny);
