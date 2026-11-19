@@ -186,14 +186,13 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .vc-draft__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sapContent_Space_Tiny); }
 .vc-draft__empty { margin: 0; color: var(--sapContent_LabelColor); line-height: 1.5; }
 
-/* Intents mode: draft left (scrolls), intent panel right (scrolls on its own). */
-.ic .vc-convo { flex: 1; }
-.ic-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 21rem; gap: var(--sapContent_Space_Medium); }
+/* Intents mode: the cards in the lower half (scrolls on its own). */
 .ic-side { min-height: 0; display: flex; flex-direction: column; padding-top: var(--sapContent_Space_Tiny); }
 .ic-panel { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
 .ic-panel__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sapContent_Space_Tiny); }
 .ic-panel__count { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
 .ic-panel__body { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); padding: 0.125rem 0.125rem var(--sapContent_Space_Small); }
+.ic-panel__body > .ic-topics { flex: none; }
 .ic-pending { display: flex; flex-direction: column; gap: 0.25rem; padding: var(--sapContent_Space_Tiny) var(--sapContent_Space_Small); border: var(--sapElement_BorderWidth) dashed var(--sapGroup_ContentBorderColor); border-radius: var(--sapElement_BorderCornerRadius); }
 .ic-pending__text { font-size: var(--sapFontSmallSize); font-style: italic; color: var(--sapContent_LabelColor); line-height: 1.45; overflow-wrap: anywhere; }
 .ic-error { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
@@ -234,13 +233,75 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .ic-card__annotate.is-recording, .ic-card__annotate[aria-pressed="true"] { color: var(--sapHighlightColor); }
 .ic-card__status { padding-inline-start: 2rem; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
 .ic-card__status .fh-msg-agent__thinking { font-size: var(--sapFontSmallSize); }
-/* Intents already in the draft: a collapsed group under the others. */
-.ic-kept { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); margin-top: var(--sapContent_Space_Tiny); }
-.ic-kept__toggle { align-self: flex-start; margin-inline-start: -0.25rem; padding-inline: 0.25rem; color: var(--sapContent_LabelColor); }
-.ic-kept__chevron { transition: transform 120ms; }
-.ic-kept__toggle.is-open .ic-kept__chevron { transform: rotate(90deg); }
-@media (prefers-reduced-motion: reduce) { .ic-card__annotate, .ic-kept__chevron { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ic-card__annotate { transition: none; } }
 .ic .vc-send { min-width: 14rem; }
+
+/* ---------- Intents mode, split layout ----------
+   Task sidebar on the left; to its right the draft (upper half), a divider with the microphone on it, and
+   the intents (lower half). The controls bar with send, finish and the timer spans the full width below. */
+.vc.ics { max-width: none; margin: 0; padding: 0; gap: 0; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+.ics > .vc-controls { grid-column: 1 / -1; padding-inline: var(--sapContent_Space_Medium); }
+.ics-work { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1fr); padding-inline: var(--sapContent_Space_Medium); }
+.ics-work > .vc-notices { grid-row: 1; padding-top: var(--sapContent_Space_Tiny); } /* empty: display none, so every child names its row */
+.ics-result { grid-row: 2; min-height: 0; display: flex; flex-direction: column; padding-top: var(--sapContent_Space_Small); }
+.ics .vc-turn__left { max-width: 56rem; }
+.ics-intents { grid-row: 4; min-height: 0; display: flex; flex-direction: column; }
+.ics-divider { grid-row: 3; position: relative; display: flex; justify-content: center; padding-block: var(--sapContent_Space_Tiny); }
+.ics-divider::before { content: ''; position: absolute; inset-inline: 0; top: 50%; border-top: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); }
+.ics-divider .vc-rec { position: relative; padding-inline: var(--sapContent_Space_Small); background: var(--sapBackgroundColor); }
+
+/* Topic sections of the intents: collapsible, the cards of a section next to each other. */
+.ic-topics { display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); }
+.ic-topic { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
+.ic-topic__head { margin: 0; font: inherit; }
+.ic-topic__toggle {
+  display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: 0.125rem 0.25rem; margin: 0; background: none; cursor: pointer;
+  border: 0; border-bottom: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); border-radius: 0;
+  font-family: var(--font-bold); font-weight: 700; font-size: var(--sapFontHeader6Size); color: var(--sapTitleColor); text-align: start;
+}
+.ic-topic__toggle:hover { background: var(--sapList_Hover_Background); }
+.ic-topic__toggle:focus-visible { outline: var(--sapContent_FocusWidth) solid var(--sapContent_FocusColor); outline-offset: -0.125rem; }
+.ic-topic__count { margin-inline-start: auto; font-family: var(--font-sans); font-weight: 400; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
+.ic-topic__chevron { transition: transform 120ms; }
+.ic-topic__toggle:not(.is-open) .ic-topic__chevron { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .ic-topic__chevron { transition: none; } }
+.ic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); align-items: start; gap: var(--sapContent_Space_Tiny); }
+
+/* Task sidebar: fold, resize and highlight. */
+.ts { position: relative; flex: none; display: flex; width: var(--ts-width, 22rem); min-height: 0; background: var(--sapTile_Background); border-inline-end: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); }
+.ts:not(.is-dragging) { transition: width 160ms ease; }
+.ts.is-dragging { user-select: none; -webkit-user-select: none; }
+@media (prefers-reduced-motion: reduce) { .ts:not(.is-dragging) { transition: none; } }
+.ts-panel { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.ts.is-collapsed .ts-panel { display: none; }
+.ts-head { flex: none; display: flex; align-items: center; gap: var(--sapContent_Space_Tiny); padding: var(--sapContent_Space_Small) var(--sapContent_Space_Tiny) var(--sapContent_Space_Tiny) var(--sapContent_Space_Small); }
+.ts-title { flex: 1; min-width: 0; margin: 0; font-family: var(--font-bold); font-weight: 700; font-size: var(--sapFontHeader5Size); color: var(--sapTitleColor); overflow-wrap: anywhere; }
+.ts-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); padding: var(--sapContent_Space_Tiny) var(--sapContent_Space_Small) var(--sapContent_Space_Small); outline: none; }
+.ts-materials { display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); padding-top: var(--sapContent_Space_Small); border-top: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); }
+.ts-rail { display: none; }
+.ts.is-collapsed .ts-rail {
+  display: flex; flex-direction: column; align-items: center; gap: var(--sapContent_Space_Tiny); width: 100%; padding: var(--sapContent_Space_Small) 0;
+  background: none; border: 0; cursor: pointer; color: var(--sapTextColor);
+}
+.ts-rail:hover { background: var(--sapList_Hover_Background); }
+.ts-rail:focus-visible { outline: var(--sapContent_FocusWidth) solid var(--sapContent_FocusColor); outline-offset: -0.125rem; }
+.ts-rail__label { writing-mode: vertical-rl; font-family: var(--font-semibold); font-weight: 600; }
+.ts-handle { position: absolute; inset-block: 0; inset-inline-end: -0.3125rem; width: 0.625rem; z-index: 1; cursor: col-resize; touch-action: none; }
+.ts-handle::after { content: ''; position: absolute; inset-block: 0; inset-inline-start: 50%; width: 0.1875rem; transform: translateX(-50%); background: transparent; transition: background 120ms; }
+.ts-handle:hover::after, .ts-handle:focus-visible::after, .ts.is-dragging .ts-handle::after { background: var(--sapHighlightColor); }
+.ts-handle:focus-visible { outline: none; }
+.ts-tools { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; padding: 0 var(--sapContent_Space_Small) var(--sapContent_Space_Tiny); border-bottom: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); }
+.ts-tools__label { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); margin-inline-end: 0.25rem; }
+.ts-swatches { display: inline-flex; gap: 0.25rem; }
+.ts-swatch { width: 1.375rem; height: 1.375rem; padding: 0; border-radius: 50%; cursor: pointer; border: 0.125rem solid var(--ts-line); background: var(--ts-bg); }
+.ts-swatch:disabled { opacity: var(--sapContent_DisabledOpacity); cursor: default; }
+.ts-swatch:focus-visible { outline: var(--sapContent_FocusWidth) solid var(--sapContent_FocusColor); outline-offset: 0.125rem; }
+.ts-clear { margin-inline-start: auto; }
+[data-color="yellow"] { --ts-bg: var(--sapWarningBackground); --ts-line: var(--sapWarningBorderColor); }
+[data-color="green"] { --ts-bg: var(--sapSuccessBackground); --ts-line: var(--sapSuccessBorderColor); }
+[data-color="blue"] { --ts-bg: var(--sapInformationBackground); --ts-line: var(--sapInformationBorderColor); }
+[data-color="pink"] { --ts-bg: var(--sapErrorBackground); --ts-line: var(--sapErrorBorderColor); }
+mark.ts-mark { color: inherit; background: var(--ts-bg); border-bottom: 0.125rem solid var(--ts-line); }
 
 .vc-controls { padding: var(--sapContent_Space_Small) 0 var(--sapContent_Space_Medium); border-top: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); }
 .vc-controls__row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sapContent_Space_Medium); }

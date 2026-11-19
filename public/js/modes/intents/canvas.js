@@ -1,6 +1,11 @@
 // Intents mode canvas. The participant still thinks aloud, but their words become intent cards that they
 // can switch on and off and change by voice.
 //
+//   Layout (main-split): the task is a sidebar on the left (fold, resize, highlight). The work area on the
+//   right is split by a divider: the draft in the upper half, the intent cards in the lower half, and the
+//   microphone sits on the divider. The cards are sorted into collapsible topic sections (intent.topic);
+//   the cards of a section stand next to each other.
+//
 //   Start: the task's generic starting draft (task.scaffold; the server stores it as turn 1, kind
 //   'scaffold', via /api/intents/start). A task without one starts like the voice mode instead:
 //   recordings build an instruction, which is sent as spoken and produces the first draft.
@@ -9,17 +14,17 @@
 //   own words (folded), a checkbox (on/off) and a hold-to-change microphone; an annotation is transcribed
 //   and the LLM rewrites the intent (and its reason) on release. Send hands the AI only the active intents
 //   (with their reasons) plus the latest draft (no history), which gives the next version. Cards stay;
-//   those in the latest version go into a collapsed "In the draft" group. New recordings add new cards.
+//   each card shows whether it is new, changed or in the draft. New recordings add new cards.
 //
 // Same interface as the voice canvas (createCanvas(ctx, options) → { el, timerSlot, noticeSlot, regions,
 // getRegion, onFinishRequest, isBusy, whenIdle, setLocked, stopRecording, destroy }). Extra regions for the
 // tour: intents (the card panel), intentCard (the first card).
 import { h, icon, clear, messageStrip } from '../../core/dom.js';
-import { t } from '../../core/strings.js';
+import { t, raw } from '../../core/strings.js';
 import { api } from '../../core/api.js';
 import { logEvent } from '../../core/logEvent.js';
 import { createConversation } from '../../core/conversation.js';
-import { createTaskPanel } from '../../core/canvas/taskPanel.js';
+import { createTaskSidebar } from '../../core/canvas/taskSidebar.js';
 import { createLatestResponse, busy } from '../../core/canvas/latestResponse.js';
 import { createControls } from '../../core/canvas/controls.js';
 import { createVoiceInput } from '../../core/canvas/voiceInput.js';
@@ -82,19 +87,19 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   });
 
   // ----- layout -----
-  const taskPanel = createTaskPanel({ task, round, live, conceal });
+  const sidebar = createTaskSidebar({ task, round, live, conceal });
   const noticeSlot = h('div.vc-notices');
   const left = h('div');
   const scroller = h('div.vc-convo__scroll', { tabindex: '0', 'aria-label': t('canvas.conversationLabel') }, left);
   const side = h('div.ic-side');
-  const convo = h('section.vc-convo', { dataset: { region: 'output' } }, noticeSlot, h('div.ic-layout', scroller, side));
+  const result = h('section.ics-result', { dataset: { region: 'output' } }, scroller);
   // Versions are counted from the first AI response; the starting draft has its own label.
   const versionOf = (n) => (conv.turns[0]?.kind === 'scaffold' ? n - 1 : n);
   const response = createLatestResponse({
     assistant: config.ai.assistantName, scroller, latest: conv.turns.at(-1),
     label: (turn) => (turn.kind === 'scaffold' ? t('canvas.scaffoldLabel') : turn.n ? t('canvas.versionLabel', { n: versionOf(turn.n) }) : null),
   });
-  const controls = createControls(ctx, { showFinish });
+  const controls = createControls(ctx, { showFinish, recInline: false });
   const { recButton, sendBtn, finishBtn, timerSlot } = controls;
   const canvasApi = { onFinishRequest: null };
   finishBtn.addEventListener('click', () => canvasApi.onFinishRequest?.());
@@ -288,32 +293,46 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     clear(errorSlot).append(errorStrip(card.error) ?? '');
   }
 
-  const listEl = h('ol.ic-list');
-  // Applied cards: a collapsed group under the others.
-  let keptOpen = false;
-  const keptList = h('ol.ic-list', { id: `ic-kept-${round}` });
-  const keptLabel = h('span');
-  const keptToggle = h('button.fh-btn.fh-btn--transparent.ic-kept__toggle', { type: 'button', 'aria-controls': keptList.id }, icon('slim-arrow-right', 'ic-kept__chevron'), keptLabel);
-  keptToggle.addEventListener('click', () => {
-    keptOpen = !keptOpen;
-    logEvent('intents.keptToggled', { open: keptOpen, count: keptList.children.length });
-    render();
-  });
-  const kept = h('div.ic-kept', keptToggle, keptList);
+  // Topic sections: one collapsible section per topic, its cards next to each other. A topic is the
+  // intent's `topic` (empty: not sorted yet). Known topics come first in a fixed order (strings:
+  // intents.topicLabels); any other topic follows in the order it appeared.
+  const topicLabels = raw('intents.topicLabels') ?? {};
+  const topicOrder = Object.keys(topicLabels);
+  const topicOf = (intent) => (typeof intent.topic === 'string' ? intent.topic.trim() : '');
+  const topicName = (key) => (key === '' ? t('intents.topicUnsorted') : topicLabels[key] ?? key);
+  const sections = new Map(); // topic → section
+  const folded = new Set(); // topics the participant has folded
+  const topics = h('div.ic-topics');
+
+  function createSection(key) {
+    const list = h('ol.ic-list.ic-grid', { id: `ic-topic-${round}-${sections.size}` });
+    const name = h('span.ic-topic__name');
+    const count = h('span.ic-topic__count');
+    const toggle = h('button.ic-topic__toggle', { type: 'button', 'aria-controls': list.id }, icon('slim-arrow-down', 'ic-topic__chevron'), name, count);
+    toggle.addEventListener('click', () => {
+      const open = folded.has(key);
+      if (open) folded.delete(key); else folded.add(key);
+      logEvent('intents.topicToggled', { topic: key, open, count: list.children.length });
+      render();
+    });
+    const el = h('section.ic-topic', { dataset: { topic: key } }, h('h3.ic-topic__head', toggle), list);
+    return { el, list, name, count, toggle };
+  }
+
   const panelCount = h('span.ic-panel__count');
   const panelBody = h('div.ic-panel__body', { tabindex: '-1' });
   const panel = h('aside.ic-panel', { dataset: { region: 'intents' }, 'aria-label': t('intents.panelLabel') },
     h('div.ic-panel__head', h('div.vc-instruction__label', t('intents.panelLabel')), panelCount),
     panelBody);
 
-  // Puts the cards into a list in this order, moving only those that are out of place. Moving an element
-  // takes the focus away from it, so the focus is put back.
-  function place(list, ordered) {
+  // Puts the elements into a container in this order, moving only those that are out of place. Moving an
+  // element takes the focus away from it, so the focus is put back.
+  function place(container, ordered) {
     const focused = document.activeElement;
-    ordered.forEach((card, i) => {
-      if (list.children[i] !== card.el) list.insertBefore(card.el, list.children[i] ?? null);
+    ordered.forEach((el, i) => {
+      if (container.children[i] !== el) container.insertBefore(el, container.children[i] ?? null);
     });
-    while (list.children.length > ordered.length) list.lastElementChild.remove();
+    while (container.children.length > ordered.length) container.lastElementChild.remove();
     if (focused && focused !== document.activeElement && document.contains(focused)) focused.focus({ preventScroll: true });
   }
 
@@ -324,28 +343,36 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     for (const [id, card] of cards) {
       if (!intents.some((x) => x.id === id)) { card.input?.destroy(); card.el.remove(); cards.delete(id); }
     }
-    const open = [];
-    const applied = [];
-    for (const intent of [...intents].reverse()) { // newest first
+    const groups = new Map(); // topic → cards, newest first
+    for (const intent of [...intents].reverse()) {
       if (!cards.has(intent.id)) cards.set(intent.id, createCard(intent));
       const card = cards.get(intent.id);
       updateCard(card, intent);
-      (stateOf(intent) === 'applied' ? applied : open).push(card);
+      const key = topicOf(intent);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ card, intent });
     }
-    // A card that is moving between the lists leaves its old one first.
-    for (const card of open) if (card.el.parentNode === keptList) card.el.remove();
-    for (const card of applied) if (card.el.parentNode === listEl) card.el.remove();
-    place(listEl, open);
-    place(keptList, applied);
-
-    kept.hidden = !applied.length;
-    // A recording or a change running in the group keeps it open.
-    const keptBusy = applied.some((c) => c.busy || c.recordingSeconds !== null);
-    const showKept = keptOpen || keptBusy || !live;
-    keptList.hidden = !showKept;
-    keptToggle.setAttribute('aria-expanded', String(showKept));
-    keptToggle.classList.toggle('is-open', showKept);
-    keptLabel.textContent = t('intents.kept', { n: applied.length });
+    const rank = (key) => (key === '' ? -1 : topicOrder.includes(key) ? topicOrder.indexOf(key) : topicOrder.length);
+    const keys = [...groups.keys()].sort((a, b) => rank(a) - rank(b)); // the sort is stable: other topics keep their order
+    for (const [key, section] of sections) if (!groups.has(key)) { section.el.remove(); sections.delete(key); }
+    const ordered = [];
+    for (const key of keys) {
+      if (!sections.has(key)) sections.set(key, createSection(key));
+      const section = sections.get(key);
+      const members = groups.get(key);
+      const on = members.filter((m) => m.intent.active).length;
+      // A recording or a change running in a section keeps it open.
+      const working = members.some((m) => m.card.busy || m.card.recordingSeconds !== null);
+      const open = !folded.has(key) || working;
+      setText(section.name, topicName(key));
+      setText(section.count, t('intents.count', { active: on, total: members.length }));
+      section.list.hidden = !open;
+      section.toggle.setAttribute('aria-expanded', String(open));
+      section.toggle.classList.toggle('is-open', open);
+      place(section.list, members.map((m) => m.card.el));
+      ordered.push(section.el);
+    }
+    place(topics, ordered);
 
     const top = [];
     if (transcribing) top.push(h('div.ic-pending', busy(t('canvas.transcribing'))));
@@ -355,8 +382,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     if (noneFound && !extracting && !transcribing) top.push(messageStrip('information', t('intents.noneFound')));
     const idle = !extracting && !transcribing;
     if (!intents.length && idle) top.push(h('p.vc-draft__empty', t(ptt ? 'intents.emptyPushToTalk' : 'intents.emptyToggle')));
-    else if (!open.length && idle) top.push(h('p.vc-draft__empty', t(ptt ? 'intents.allAppliedPushToTalk' : 'intents.allAppliedToggle')));
-    clear(panelBody).append(...top, listEl, kept);
+    clear(panelBody).append(...top, topics);
     return panel;
   }
 
@@ -383,7 +409,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       return;
     }
     clear(left).append(response.render({ inflight, latest, error: conv.error }));
-    // Right side: before the first draft the instruction (being recorded or being answered); after it,
+    // Lower half: before the first draft the instruction (being recorded or being answered); after it,
     // the intent cards.
     const right = !hasDraft() && !(inflight && intents.length)
       ? (inflight ? instructionBlock(inflight) : draftBlock())
@@ -515,7 +541,10 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   }
 
   // ----- assemble -----
-  const el = h('div.vc.ic', { class: live ? '' : 'vc--static' }, taskPanel, convo, controls.el);
+  // The microphone sits on the line between the draft (above) and the intents (below).
+  const divider = h('div.ics-divider', controls.rec);
+  const work = h('div.ics-work', noticeSlot, result, divider, h('section.ics-intents', side));
+  const el = h('div.vc.ic.ics', { class: live ? '' : 'vc--static' }, sidebar.el, work, controls.el);
   render();
   if (live && task?.scaffold && !conv.turns.length && !conv.inflight) start();
 
@@ -523,10 +552,10 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     el,
     timerSlot,
     noticeSlot,
-    regions: { task: taskPanel, record: recButton.parentElement, send: sendBtn, output: scroller, intents: panel, timer: timerSlot, finish: finishBtn },
+    regions: { task: sidebar.el, record: recButton.parentElement, send: sendBtn, output: scroller, intents: panel, timer: timerSlot, finish: finishBtn },
     getRegion(name) {
       if (name === 'transcript') return el.querySelector('[data-region="transcript"]');
-      if (name === 'intentCard') return listEl.firstElementChild;
+      if (name === 'intentCard') return topics.querySelector('.ic-card');
       return this.regions[name];
     },
     isBusy: () => conv.isBusy(),
@@ -544,6 +573,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       input?.destroy();
       for (const c of cards.values()) c.input?.destroy();
       response.destroy();
+      sidebar.destroy();
       conv.destroy();
     },
   });

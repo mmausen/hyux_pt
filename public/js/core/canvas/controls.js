@@ -1,13 +1,15 @@
 // Controls bar at the bottom of every mode's canvas: record button with its label, status and level
 // meter; send; finish; and the slot the task screen puts the timer bar into.
 //
-//   const c = createControls(ctx, { showFinish, sendLabelKey });
-//   c.el, c.recButton, c.sendBtn, c.finishBtn, c.timerSlot
+//   const c = createControls(ctx, { showFinish, sendLabelKey, recInline });
+//   c.el, c.rec, c.recButton, c.sendBtn, c.finishBtn, c.timerSlot
+//   recInline: false leaves the record button (c.rec, with its label, status and level meter) out of the bar,
+//   so the canvas can put it somewhere else (the intents mode puts it on the divider).
 //   c.recordingStarted(), c.recordingTick(s), c.recordingLevel(l), c.recordingStopped(rec), c.setSendLabel(key, vars)
 import { h, icon } from '../dom.js';
 import { t } from '../strings.js';
 
-export function createControls(ctx, { showFinish = true, sendLabelKey = 'canvas.send' } = {}) {
+export function createControls(ctx, { showFinish = true, sendLabelKey = 'canvas.send', recInline = true } = {}) {
   const { config } = ctx;
   const ptt = config.interaction.recordingMode === 'pushToTalk';
 
@@ -16,6 +18,7 @@ export function createControls(ctx, { showFinish = true, sendLabelKey = 'canvas.
   const recLabel = h('span.vc-rec__label');
   const recStatus = h('span.vc-rec__status', { 'aria-live': 'polite' });
   const recButton = h('button.app-record.vc-rec__button', { type: 'button', dataset: { region: 'record' } }, icon('microphone', 'fh-icon--l'));
+  const rec = h('div.vc-rec', recButton, h('div.vc-rec__text', recLabel, recStatus, meter));
   const sendText = h('span', t(sendLabelKey));
   const sendBtn = h('button.fh-btn.fh-btn--emphasized.vc-send', { type: 'button', dataset: { region: 'send' } }, icon('ai'), sendText);
   const finishBtn = h('button.fh-btn', { type: 'button', hidden: !showFinish, dataset: { region: 'finish' } }, t('canvas.finish'));
@@ -33,13 +36,13 @@ export function createControls(ctx, { showFinish = true, sendLabelKey = 'canvas.
     h('div.vc-controls__row',
       h('div.vc-controls__side'),
       h('div.vc-controls__main',
-        h('div.vc-rec', recButton, h('div.vc-rec__text', recLabel, recStatus, meter)),
+        recInline ? rec : null,
         sendBtn),
       h('div.vc-controls__side.vc-controls__side--end', finishBtn)),
     timerSlot);
 
   return {
-    el, recButton, sendBtn, finishBtn, timerSlot,
+    el, rec, recButton, sendBtn, finishBtn, timerSlot,
     recordingStarted() {
       recLabel.textContent = t(ptt ? 'canvas.recordHold' : 'canvas.recordStop');
       recStatus.textContent = t('canvas.recordingStatus', { seconds: 0 });

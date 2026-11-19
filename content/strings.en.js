@@ -112,6 +112,24 @@ export default {
     situationLabel: 'Situation',
     showTask: 'Show Task',
     hideTask: 'Hide Task',
+    // Intents mode: the task sidebar (fold, resize, highlight).
+    sidebar: {
+      hide: 'Fold the task panel',
+      show: 'Open the task panel',
+      resize: 'Drag to resize. Double click to fold or open.',
+      resizeLabel: 'Resize the task panel',
+    },
+    highlight: {
+      label: 'Highlight',
+      yellow: 'Yellow',
+      green: 'Green',
+      blue: 'Blue',
+      pink: 'Pink',
+      apply: 'Highlight the selected text in {color}',
+      remove: 'Remove',
+      removeTitle: 'Remove the highlight from the selected text',
+      clearAll: 'Clear All',
+    },
     conversationLabel: 'Conversation with the assistant',
     instructionLabel: 'Your Instruction',
     draftLabel: 'Current Instruction',
@@ -185,9 +203,16 @@ export default {
     useLabel: 'Use intent: {text}',
     why: 'Why',
     yourWords: 'Your words',
-    kept: 'In the draft ({n})', // intents in the latest version, unchanged since (collapsed group)
-    allAppliedPushToTalk: 'Everything here is in the draft. Hold the record button and say what else to change.',
-    allAppliedToggle: 'Everything here is in the draft. Select the record button and say what else to change.',
+    // Topic sections. The keys are the values of an intent's topic, in this order; any other topic is shown
+    // under its own name after these. Intents without a topic wait in the first section.
+    topicLabels: {
+      structure: 'Structure',
+      tone: 'Tone',
+      mainArguments: 'Main Arguments',
+      secondaryArguments: 'Secondary Arguments',
+      details: 'Details',
+    },
+    topicUnsorted: 'Not Sorted Yet',
     annotateHold: 'Hold to Change',
     annotateStart: 'Change by Voice',
     annotateStop: 'Stop Recording',
@@ -218,11 +243,11 @@ export default {
       finish: { title: 'Finish the Task', text: 'Select Finish Task when you are happy with the result. You can finish at any time, also before the time limit.' },
     },
     intents: {
-      task: { title: 'Your Task', text: 'Your task and its situation are always shown at the top. Select Hide Situation if you need more room for your work.' },
-      recordPushToTalk: { title: 'Speak Your Thoughts', text: 'Hold this button, or the Space key, while you say what you want to change in the draft and why. What you say becomes intents: short change requests for the draft, with your reasons.' },
-      recordToggle: { title: 'Speak Your Thoughts', text: 'Select this button to start recording, say what you want to change in the draft and why, and select it again when you are done. What you say becomes intents: short change requests for the draft, with your reasons.' },
-      output: { title: 'Read the Draft', text: 'Each task starts with a generic starting draft: a plain outline for you to shape. The assistant’s latest version appears here; each new version replaces the previous one, and the time next to it shows when it was last updated.' },
-      intents: { title: 'Your Intents', text: 'Each thing you ask for appears here as a card, newest first, with your reason under “Why”. One recording can give several intents. “New” marks intents that have not been sent yet; intents already in the draft move to a folded group at the bottom.' },
+      task: { title: 'Your Task', text: 'Your task and its situation stay on the left. Drag the edge to change the width, or select the arrow to fold the panel away. Select text and pick a colour to mark it. The marks are only for you.' },
+      recordPushToTalk: { title: 'Speak Your Thoughts', text: 'Hold this button, or the Space key, while you say what you want to change in the draft and why. What you say becomes intents: short change requests for the draft, with your reasons. The button sits on the line between the draft and your intents.' },
+      recordToggle: { title: 'Speak Your Thoughts', text: 'Select this button to start recording, say what you want to change in the draft and why, and select it again when you are done. What you say becomes intents: short change requests for the draft, with your reasons. The button sits on the line between the draft and your intents.' },
+      output: { title: 'Read the Draft', text: 'Each task starts with a generic starting draft: a plain outline for you to shape. The assistant’s latest version appears in the upper half; each new version replaces the previous one, and the time next to it shows when it was last updated.' },
+      intents: { title: 'Your Intents', text: 'Each thing you ask for appears in the lower half as a card with your reason under “Why”. One recording can give several intents. The cards are sorted by topic, and you can fold each topic away. “New” marks intents that have not been sent yet.' },
       cardPushToTalk: { title: 'Use or Change an Intent', text: 'Clear the box to leave an intent out of the next version. Select “Your words” to see what you said. To change an intent, hold its microphone button and say what to change; it is updated when you release the button.' },
       cardToggle: { title: 'Use or Change an Intent', text: 'Clear the box to leave an intent out of the next version. Select “Your words” to see what you said. To change an intent, select its microphone button, say what to change and select it again; it is updated then.' },
       send: { title: 'Send the Intents', text: 'Sends the intents that are ticked, with your reasons and the latest draft, to the assistant. It writes a new version from them; earlier versions are not sent. The button shows how many intents are new and how many are kept from the draft.' },
@@ -247,9 +272,9 @@ export default {
       // Intents mode: the tour shows this starting draft instead of the turns above.
       scaffold: 'Subject: [Subject line]\n\nDear [Name],\n\n[Thank the customer for the meeting.]\n\n[Refer to what was discussed and what you send with this email.]\n\n[Closing and next step.]\n\nBest regards,\n[Your name]',
       intents: [
-        { text: 'Use a less formal greeting', reason: '', quote: 'Maybe a less formal greeting.', active: false },
-        { text: 'Make it a bit more personal', reason: 'We have known each other for years', quote: 'Make it a bit more personal, we have known each other for years.' },
-        { text: 'Mention the new delivery options', reason: 'He asked about shorter delivery times', quote: 'And mention the new delivery options, he asked about shorter delivery times.' },
+        { text: 'Use a less formal greeting', topic: 'tone', reason: '', quote: 'Maybe a less formal greeting.', active: false },
+        { text: 'Make it a bit more personal', topic: 'tone', reason: 'We have known each other for years', quote: 'Make it a bit more personal, we have known each other for years.' },
+        { text: 'Mention the new delivery options', topic: 'details', reason: 'He asked about shorter delivery times', quote: 'And mention the new delivery options, he asked about shorter delivery times.' },
       ],
     },
     practice: {
