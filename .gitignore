@@ -20,3 +20,6 @@ sessions/
 
 # Local study material (brief, task documents, screenshots). Not part of the repo.
 material/
+
+# Temporary literature folder (papers, notes). Not part of the repo.
+literature/

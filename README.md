@@ -8,19 +8,35 @@ This is a research prototype for a voice-driven AI task study. Participants are 
 
 ---
 
+## Interactions and branches
+
+The prototype compares four ways of working with the AI on the same tasks. Every task starts from the same neutral starting draft, and every interaction keeps the task panel at the top and the time bar at the bottom. Each interaction lives on its own branch. `main` also keeps the basic `voice` mode.
+
+| Interaction | Branch | How it works |
+|---|---|---|
+| **Intents** | [`main`](https://github.com/mmausen/hyux_pt/tree/main) | The participant thinks aloud. Each recording is split into intents: short change requests, each with the participant's reason. They appear as cards that can be switched on or off and changed by voice. **Send** hands the AI the intents that are on plus the latest draft, and the AI writes the next version. |
+| **Highlight** | [`highlight`](https://github.com/mmausen/hyux_pt/tree/highlight) | The participant selects text in the draft. It is framed as a pill for one line or a rounded box for several lines, with icons to add a voice annotation and to send it to the AI. The AI returns targeted edits, and only the affected passages change. **Challenge Me** uses the annotation, the selection and the whole text to ask one short question that makes the participant reconsider their standpoint. It appears as a popup and needs no answer. |
+| **Slider** | [`slider`](https://github.com/mmausen/hyux_pt/tree/slider) | The draft is on the left and a "slot machine" of sliders on the right. Each slider is one key decision between two contrasting poles, for example "Close fast, apply pressure" vs. "Take it slow, build trust". **Send Settings** writes a version from the combined settings. Generation is anchored on the previous version and cached per setting, so each change shows its own effect. By voice, the participant can add a slider (the AI finds the two poles) or remove one. |
+| **Compare** | [`compare`](https://github.com/mmausen/hyux_pt/tree/compare) | Two similar but not identical versions stand side by side. The participant picks the one they prefer and says what they like most about it. This feeds a hidden preference profile. The picked version stays, and the other is replaced by a new one written from the profile. Step by step the profile gets richer and the versions converge, until the participant accepts one as final. |
+
+To try an interaction, check out its branch. Each branch has its own interaction as the default `interaction.mode` in `config.js`. The tutorial exists only for `voice` and `intents`.
+
+---
+
 ## Contents
 
-1. [Setup](#setup)
-2. [How the study runs](#how-the-study-runs)
-3. [Configuration reference](#configuration-reference) (every option in `config.js` and `.env`)
-4. [Adding or changing a task](#adding-or-changing-a-task)
-5. [Text, questionnaire and language](#text-questionnaire-and-language)
-6. [Adding an interaction mode](#adding-an-interaction-mode)
-7. [Dev mode](#dev-mode)
-8. [Logging](#logging)
-9. [Security and privacy](#security-and-privacy)
-10. [Running a study session](#running-a-study-session)
-11. [Project structure](#project-structure)
+1. [Interactions and branches](#interactions-and-branches)
+2. [Setup](#setup)
+3. [How the study runs](#how-the-study-runs)
+4. [Configuration reference](#configuration-reference) (every option in `config.js` and `.env`)
+5. [Adding or changing a task](#adding-or-changing-a-task)
+6. [Text, questionnaire and language](#text-questionnaire-and-language)
+7. [Adding an interaction mode](#adding-an-interaction-mode)
+8. [Dev mode](#dev-mode)
+9. [Logging](#logging)
+10. [Security and privacy](#security-and-privacy)
+11. [Running a study session](#running-a-study-session)
+12. [Project structure](#project-structure)
 
 ---
 
@@ -77,7 +93,7 @@ post:  end
 | **systemCheck** | Microphone permission, then a level meter. The participant reads the test sentence aloud, the recording is transcribed, and one short LLM call is made. Each check can be retried. After `retriesBeforeContact` failed retries, a contact text appears. |
 | **tutorial** | A guided tour over a sample canvas that highlights one area at a time. Then, if `tutorial.practiceTurn` is on, one real instruction is sent to the assistant. |
 | **briefing** | A dialog over the canvas shows the full scenario (situation and task) and the recommended time limit, so reading does not count toward task time. The task text behind it is hidden. **Start Task** starts the timer. |
-| **task** | The main canvas of the session's [interaction mode](#interaction-modes). The task panel shows the title and the task; the situation (and any materials) is shown next to it and can be collapsed with **Hide Situation**. Only the assistant's latest response is shown (each new one replaces it), with how long ago it was updated. Earlier responses stay stored and logged. The participant keeps going until they select **Finish Task** or time runs out. |
+| **task** | The main canvas of the session's [interaction mode](#interaction-modes). The task panel starts collapsed to the task title; **Show Task** opens the task with the situation (and any materials) next to it, and **Hide Task** collapses it again. Only the assistant's latest response is shown (each new one replaces it), with how long ago it was updated. Earlier responses stay stored and logged. The participant keeps going until they select **Finish Task** or time runs out. |
 | **survey** | The questionnaire about the task, either built in or a link to an external tool. |
 | **interview** | "Conversation Review": a read-only view of the task and every turn with timestamps, to look at together with the interviewer. Off by default. |
 | **end** | Marks the session complete and shows the completion code, if one is set. |
@@ -254,7 +270,7 @@ Tasks are in `data/tasks.json`:
 ```
 
 - `id`, `title`, `situation`, `task` and `timeLimitMinutes` are required. `briefing` may be an empty string. `materials` and `scaffold` are optional. `scaffold` is only used by the intents mode, and it is the one part of the task the model sees (as the first current draft).
-- The briefing shows `situation` and `task` in full. During the task the situation and any materials are shown next to the task; **Hide Situation** collapses them.
+- The briefing shows `situation` and `task` in full. During the task the task panel starts collapsed; **Show Task** opens the task, the situation and any materials.
 - Use a blank line (`\n\n`) in `situation` to separate paragraphs. Line breaks are kept.
 - The layout is checked for a situation of about 120 words and a task of about 40 words, at 1024×768 and larger. Much longer texts still work but scroll.
 - `placeholderFields` (optional) is only a note for authors. It marks fields that still hold generated placeholder text.
