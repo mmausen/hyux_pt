@@ -16,6 +16,9 @@
 //   Structure and generate: Write Version brings all active intents into one plan (they may be combined,
 //   reworded and regrouped; the cards change to it on screen) and then writes the text anew from the
 //   starting draft and that plan, so the cards show what the version is built from.
+//   Generative UI (gen-ui): the plan may come with components (argument order and level, tone per
+//   passage). They sit in the group row next to the groups; selecting one opens it in place of the cards.
+//   What the participant sets there goes into the next version.
 //
 // Same interface as the voice canvas (createCanvas(ctx, options) → { el, timerSlot, noticeSlot, regions,
 // getRegion, onFinishRequest, isBusy, whenIdle, setLocked, stopRecording, destroy }). Extra regions for the
@@ -29,6 +32,7 @@ import { createTaskSidebar } from '../../core/canvas/taskSidebar.js';
 import { createLatestResponse, busy } from '../../core/canvas/latestResponse.js';
 import { createControls } from '../../core/canvas/controls.js';
 import { createVoiceInput } from '../../core/canvas/voiceInput.js';
+import { renderComponent, componentTitle } from './components.js';
 
 const timeOf = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '');
 const errorKey = (e) => (e?.code === 'rate_limited' ? 'rateLimited' : e?.code === 'llm_timeout' || e?.name === 'TimeoutError' ? 'timeout' : null);
@@ -61,7 +65,12 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   // Order of the groups and their accent colours, kept by the server (rounds[round].groups / .accents).
   let groupOrder = sample ? [] : [...(session.data?.rounds?.[String(round)]?.groups ?? [])];
   let accents = sample ? {} : { ...(session.data?.rounds?.[String(round)]?.accents ?? {}) };
-  const takeGroups = (res) => { if (res?.groups) groupOrder = res.groups; if (res?.accents) accents = res.accents; };
+  let components = sample ? [] : [...(session.data?.rounds?.[String(round)]?.components ?? [])];
+  const takeGroups = (res) => {
+    if (res?.groups) groupOrder = res.groups;
+    if (res?.accents) accents = res.accents;
+    if (res?.components) components = res.components;
+  };
   const cards = new Map(); // id → card component
 
   const draftText = () => draft.map((d) => d.text).join(' ').trim();
@@ -79,6 +88,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     r.intents = intents;
     r.groups = groupOrder;
     r.accents = accents;
+    r.components = components;
   }
 
   const conv = createConversation(ctx, {
@@ -107,6 +117,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
         intents = [...serverIntents()];
         groupOrder = [...(session.data?.rounds?.[String(round)]?.groups ?? groupOrder)];
         accents = { ...(session.data?.rounds?.[String(round)]?.accents ?? accents) };
+        components = [...(session.data?.rounds?.[String(round)]?.components ?? components)];
       }
       structuring = false;
       if (turn.intents) {
@@ -386,6 +397,43 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   const groups = new Map(); // group → group button
   const groupRow = h('div.ic-groups', { role: 'group', 'aria-label': t('intents.groupsLabel') });
   const cardRow = h('ol.ic-list.ic-row', { id: `ic-row-${round}` });
+  const compHost = h('div.ic-comp', { id: `ic-comp-${round}` });
+  const compPills = new Map(); // '@type' → pill
+  let compError = null;
+  function createCompPill(key) {
+    const name = h('span.ic-group__name');
+    const mark = h('span.ic-group__mark', { 'aria-hidden': 'true' });
+    const el = h('button.ic-group.ic-group--comp', { type: 'button', 'aria-controls': compHost.id }, h('span.ic-group__glyph', { 'aria-hidden': 'true' }), name, mark);
+    el.addEventListener('click', () => {
+      openGroup = openGroup === key ? null : key;
+      logEvent('gen.componentToggled', { type: key.slice(1), open: openGroup === key });
+      render();
+    });
+    return { el, name, mark };
+  }
+  async function changeComponent(next) {
+    const i = components.findIndex((c) => c.type === next.type);
+    if (i < 0) return;
+    const before = components[i];
+    components = components.map((c, j) => (j === i ? { ...next, by: 'author', updatedAt: new Date().toISOString() } : c));
+    compError = null;
+    remember();
+    logEvent('gen.componentChanged', { type: next.type, ...(next.type === 'arguments' ? { order: next.items.map((x) => x.id), levels: next.items.map((x) => x.level) } : { tones: next.passages.map((x) => x.tone) }) });
+    render();
+    try {
+      const res = await api.intents.setComponents(round, [next]);
+      if (destroyed) return;
+      components = res.components;
+      remember();
+    } catch (e) {
+      if (destroyed) return;
+      components = components.map((c, j) => (j === i ? before : c));
+      compError = { key: 'componentSave' };
+      logEvent('gen.componentFailed', { type: next.type, error: e.code ?? e.name });
+      remember();
+    }
+    render();
+  }
 
   function createGroup(key) {
     const name = h('span.ic-group__name');
@@ -417,9 +465,15 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   }
 
   // The active intents differ from those the latest version was written from.
+  // A component the participant changed after the latest version.
+  const settingChanged = (c) => {
+    const done = conv.turns.at(-1)?.respondedAt;
+    return c.by === 'author' && Boolean(c.updatedAt) && (!done || c.updatedAt > done);
+  };
   function changedSinceVersion() {
     const used = conv.turns.at(-1)?.intents;
     if (!used) return false;
+    if (components.some(settingChanged)) return true;
     const now = activeIntents();
     if (now.length !== used.length) return true;
     return now.some((x) => { const u = used.find((y) => y.id === x.id); return !u || (u.updatedAt ? u.updatedAt !== x.updatedAt : u.text !== x.text); });
@@ -446,7 +500,8 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     // something new, else the first group.
     const working = keys.find((k) => byTopic.get(k).some((m) => m.card.busy || m.card.recordingSeconds !== null));
     if (working !== undefined) openGroup = working;
-    if (openGroup === undefined || (openGroup !== null && !byTopic.has(openGroup))) {
+    const isComp = typeof openGroup === 'string' && openGroup.startsWith('@');
+    if (openGroup === undefined || (openGroup !== null && !isComp && !byTopic.has(openGroup))) {
       openGroup = keys.find((k) => byTopic.get(k).some((m) => ['new', 'changed'].includes(stateOf(m.intent)))) ?? keys[0] ?? undefined;
     }
     for (const [key, g] of groups) if (!byTopic.has(key)) { g.el.remove(); groups.delete(key); }
@@ -467,8 +522,32 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       g.el.classList.toggle('has-new', hasNew);
       return g.el;
     });
+    // Components after the groups; one opens in place of the cards.
+    for (const [key, pill] of compPills) if (!components.some((c) => `@${c.type}` === key)) { pill.el.remove(); compPills.delete(key); }
+    for (const c of components) {
+      const key = `@${c.type}`;
+      if (!compPills.has(key)) compPills.set(key, createCompPill(key));
+      const pill = compPills.get(key);
+      const open = openGroup === key;
+      setText(pill.name, componentTitle(c));
+      pill.el.dataset.type = c.type;
+      pill.el.setAttribute('aria-expanded', String(open));
+      pill.el.classList.toggle('is-open', open);
+      pill.el.classList.toggle('has-new', settingChanged(c));
+      pill.mark.hidden = !settingChanged(c);
+      ordered.push(pill.el);
+    }
+    if (openGroup?.startsWith?.('@') && !compPills.has(openGroup)) openGroup = keys[0];
     place(groupRow, ordered);
-    const shown = openGroup !== null && openGroup !== undefined ? byTopic.get(openGroup) ?? [] : [];
+    const comp = openGroup?.startsWith?.('@') ? components.find((c) => `@${c.type}` === openGroup) : null;
+    const compLocked = locked || Boolean(conv.inflight) || synthesizing > 0;
+    // The component is drawn anew each time; the focus goes back to the element it was on.
+    const fkey = compHost.contains(document.activeElement) ? document.activeElement.dataset?.fkey : null;
+    if (comp) clear(compHost).append(renderComponent(comp, { intents, locked: compLocked, accentOf, groupOf, onChange: changeComponent }) ?? '');
+    else clear(compHost);
+    if (fkey) [...compHost.querySelectorAll('[data-fkey]')].find((x) => x.dataset.fkey === fkey)?.focus({ preventScroll: true });
+    compHost.hidden = !comp;
+    const shown = !comp && openGroup !== null && openGroup !== undefined ? byTopic.get(openGroup) ?? [] : [];
     place(cardRow, shown.map((m) => m.card.el));
     cardRow.hidden = !shown.length;
     cardRow.dataset.accent = String(accentOf(openGroup ?? ''));
@@ -479,6 +558,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     for (const text of finding) status.push(h('div.ic-pending', busy(t('intents.finding')), h('q.ic-pending__text', text)));
     if (structuring) status.push(h('div.ic-pending', busy(t('intents.structuring'))));
     if (inputError) status.push(errorStrip(inputError));
+    if (compError) status.push(errorStrip(compError));
     const idle = !synthesizing && !transcribing;
     if (lastUndo && idle && !conv.inflight) {
       const undoBtn = h('button.fh-btn.fh-btn--transparent.ic-undo__btn', { type: 'button', disabled: locked || anyRecording() }, icon('undo'), h('span', t('intents.undo')));
@@ -490,8 +570,8 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     else if (idle && !conv.inflight && changedSinceVersion()) status.push(h('p.ic-hint', t('intents.changedSince', { n: versionOf(conv.turns.at(-1).n) })));
     clear(panelStatus).append(...status);
     panelStatus.hidden = !status.length;
-    if (panelBody.firstChild !== groupRow) clear(panelBody).append(groupRow, panelStatus, cardRow);
-    groupRow.hidden = !keys.length;
+    if (panelBody.firstChild !== groupRow) clear(panelBody).append(groupRow, panelStatus, cardRow, compHost);
+    groupRow.hidden = !keys.length && !components.length;
     return panel;
   }
 

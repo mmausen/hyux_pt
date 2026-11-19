@@ -59,6 +59,7 @@ export const api = {
     undo: (round, token) => request('POST', '/api/intents/undo', { json: { round, token } }),
     annotate: (round, id, text, signal) => request('POST', `/api/intents/${encodeURIComponent(id)}/annotate`, { json: { round, text }, signal }),
     setActive: (round, id, active) => request('PUT', `/api/intents/${encodeURIComponent(id)}`, { json: { round, active } }),
+    setComponents: (round, components) => request('PUT', '/api/intents/components', { json: { round, components } }),
     remove: (round, id) => request('DELETE', `/api/intents/${encodeURIComponent(id)}`, { json: { round } }),
   },
   dev: {

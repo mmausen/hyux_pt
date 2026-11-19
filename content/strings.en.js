@@ -166,6 +166,7 @@ export default {
       intentsCollect: 'Your recording could not be turned into intents. Try again.',
       intentsUndo: 'The change could not be undone. Try again.',
       intentDelete: 'The intent could not be deleted. Try again.',
+      componentSave: 'Your setting could not be saved. Try again.',
       intentAnnotate: 'The intent could not be changed. Try again.',
       intentToggle: 'The intent could not be switched. Try again.',
       timeout: 'The request took too long. Your instruction is kept. Try again.',
@@ -202,7 +203,7 @@ export default {
     finding: 'Collecting the intents in your recording',
     structuring: 'Bringing your intents together for the next version',
     noneFound: 'No intent was found in your last recording. Try again in other words.',
-    changedSince: 'Your intents changed since Version {n}. Send to build the draft from them.',
+    changedSince: 'Your intents or settings changed since Version {n}. Write a version to apply them.',
     updating: 'Updating the intent',
     useLabel: 'Use intent: {text}',
     why: 'Why',
@@ -232,6 +233,20 @@ export default {
     // Next to the assistant's name: which intents a version was built from.
     versionFrom: 'Version {n}, built from {count} intents',
     versionFromOne: 'Version {n}, built from 1 intent',
+  },
+  // Generative UI (public/js/modes/intents/components.js): components the plan comes with.
+  gen: {
+    arguments: 'Order of the Arguments',
+    tones: 'Tone per Passage',
+    main: 'Main',
+    supporting: 'Supporting',
+    makeLevel: 'Make {level}',
+    moveEarlier: 'Move earlier',
+    moveLater: 'Move later',
+    argumentLabel: '{text}: position {n}, {level}',
+    argumentsHint: 'Drag an argument to change where the text makes it and how much weight it gets. The next version follows this order.',
+    tonesHint: 'Choose the tone for each passage. The next version writes each passage in its tone.',
+    toneFor: 'Tone for {name}',
   },
   tutorial: {
     progress: '{step} of {total}',

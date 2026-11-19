@@ -10,7 +10,7 @@
 import { Router } from 'express';
 import { requireSession, useMock } from '../middleware/session.js';
 import { rateLimit } from '../middleware/rateLimit.js';
-import { baseDraft, structureIntents, groupOf, groupsView, taskFor } from './intents.js';
+import { baseDraft, structureIntents, groupOf, groupsView, taskFor, componentsText } from './intents.js';
 import { cleanResponse } from '../../public/js/core/cleanResponse.js';
 
 const MAX_CHARS = 4000;
@@ -78,7 +78,7 @@ export function chatRoutes(app) {
         log.write('server.intents.structured', {
           turn: turn.n, latencyMs: Date.now() - started, changes: out.changes, before: out.before,
           after: roundData.intents.filter((x) => x.active).map((x) => ({ id: x.id, group: groupOf(x), text: x.text, reason: x.reason ?? '', nuance: x.nuance ?? '' })),
-          groups: roundData.groups, usage: out.usage, attempts: out.attempts, attempt: out.attempt, mock: service === mock || undefined,
+          groups: roundData.groups, components: roundData.components, usage: out.usage, attempts: out.attempts, attempt: out.attempt, mock: service === mock || undefined,
         });
         send({ type: 'intents', intents: roundData.intents, ...groupsView(roundData), changes: out.changes });
       } catch (e) {
@@ -96,6 +96,9 @@ export function chatRoutes(app) {
         groups.get(g).push(`- ${x.text}${x.nuance ? ` (${x.nuance})` : ''}${x.reason ? ` (why: ${x.reason})` : ''}`);
       }
       text = [...groups].map(([g, lines]) => `${g}:\n${lines.join('\n')}`).join('\n\n');
+      // The participant's settings in the components (order and weight of the arguments, tone per passage).
+      const settings = componentsText(roundData);
+      if (settings) text = `${text}\n\n${settings}`;
       input = `${config.ai.intents.composeInstruction}\n\nBuilding blocks:\n${text}\n\nStarting draft:\n${baseDraft(roundData)}`;
       turn.transcript = text;
       turn.intents = intents.map((x) => ({ id: x.id, group: groupOf(x), text: x.text, reason: x.reason ?? '', nuance: x.nuance ?? '', updatedAt: x.updatedAt }));

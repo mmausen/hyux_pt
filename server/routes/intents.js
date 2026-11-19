@@ -9,6 +9,13 @@
 // colour, fixed once given. Intents that were merged, taken back, deleted or undone move to
 // session.rounds[round].removedIntents (with mergedInto / removedBy and removedAt).
 //
+// Generative UI (branch gen-ui): the structuring step also chooses components from a fixed catalog and
+// fills them, when the plan calls for one (session.rounds[round].components):
+//   { type: 'arguments', title, items: [{ id, level: 'main' | 'supporting' }] }   order and level of arguments
+//   { type: 'tones', title, passages: [{ name, tone }], options: [tone] }          a tone for each passage
+// The participant changes them on screen (PUT /api/intents/components); their settings go into the next
+// version, and the next structuring keeps them (mergeComponents below).
+//
 // The work happens in rounds: collect, then structure, then generate.
 //   Collect: each recording adds intents. It changes existing cards only when it clearly revises them
 //   (and may then merge them); the last recording, or the last change of a card by voice, can be undone.
@@ -22,6 +29,7 @@
 //   POST   /api/intents/:id/annotate   { round, text }   spoken annotation → the intent, rewritten
 //   PUT    /api/intents/:id            { round, active } switch an intent on or off
 //   DELETE /api/intents/:id            { round }         delete an intent
+//   PUT    /api/intents/components     { round, components }  the participant's settings in the components
 //
 // The starting draft (`scaffold` in data/tasks.json; for the practice round tutorial.practice.intents.task
 // in the strings file) is a generic outline of the task without any choices made. It is stored as turn 1
@@ -80,8 +88,23 @@ const STRUCTURE_SCHEMA = {
         additionalProperties: false,
       },
     },
+    components: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['arguments', 'tones'] },
+          title: { type: 'string' },
+          items: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, level: { type: 'string', enum: ['main', 'supporting'] } }, required: ['id', 'level'], additionalProperties: false } },
+          passages: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, tone: { type: 'string' } }, required: ['name', 'tone'], additionalProperties: false } },
+          options: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['type', 'title', 'items', 'passages', 'options'],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ['groups', 'intents'],
+  required: ['groups', 'intents', 'components'],
   additionalProperties: false,
 };
 const ANNOTATE_SCHEMA = {
@@ -124,7 +147,7 @@ function settleGroups(roundData, order = null) {
     if (!(g in roundData.accents)) roundData.accents[g] = ACCENTS[Object.keys(roundData.accents).length % ACCENTS.length];
   }
 }
-export const groupsView = (roundData) => ({ groups: roundData.groups ?? [], accents: roundData.accents ?? {} });
+export const groupsView = (roundData) => ({ groups: roundData.groups ?? [], accents: roundData.accents ?? {}, components: roundData.components ?? [] });
 
 const fieldsOf = (x) => ({ group: groupOf(x), text: x.text, reason: x.reason ?? '', nuance: x.nuance ?? '' });
 const same = (a, b) => a.group === b.group && a.text === b.text && a.reason === b.reason && a.nuance === b.nuance;
@@ -239,13 +262,79 @@ const intentsJson = (list, newIds = null) => JSON.stringify(list.map((x) => ({
 })));
 const taskText = (task) => `Task:\n${[task.title, task.task].filter(Boolean).join('\n')}\n\nSituation:\n${task.situation ?? ''}`;
 
+// ----- components -----
+const LEVELS = ['main', 'supporting'];
+const short = (v, n) => clean(v).replace(/\s+/g, ' ').slice(0, n);
+// A component as stored: only known types, only active intents, tones from its options.
+function cleanComponent(raw, live) {
+  const type = raw?.type;
+  if (type === 'arguments') {
+    const seen = new Set();
+    const items = (Array.isArray(raw.items) ? raw.items : [])
+      .map((x) => ({ id: clean(x?.id), level: LEVELS.includes(x?.level) ? x.level : 'main' }))
+      .filter((x) => live.has(x.id) && !seen.has(x.id) && seen.add(x.id));
+    return items.length >= 2 ? { type, title: short(raw.title, 40), items } : null;
+  }
+  if (type === 'tones') {
+    const options = [...new Set((Array.isArray(raw.options) ? raw.options : []).map((x) => short(x, 40)).filter(Boolean))].slice(0, 5);
+    const passages = (Array.isArray(raw.passages) ? raw.passages : []).map((x) => ({ name: short(x?.name, 30), tone: short(x?.tone, 40) }))
+      .filter((x) => x.name).slice(0, 6);
+    for (const x of passages) if (!options.includes(x.tone)) { if (x.tone && options.length < 6) options.push(x.tone); else x.tone = options[0] ?? ''; }
+    return passages.length >= 2 && options.length >= 2 ? { type, title: short(raw.title, 40), passages, options } : null;
+  }
+  return null;
+}
+// The model's new components, with what the participant set before kept: their order and levels of the
+// arguments that are still there (merged ones follow the intent they went into), new arguments where the
+// model put them; their tone for a passage of the same name.
+function mergeComponents(previous, fresh, merged) {
+  const into = new Map((merged ?? []).map((m) => [m.id, m.into]));
+  return fresh.map((c) => {
+    const old = previous.find((p) => p.type === c.type && p.by === 'author');
+    if (!old) return { ...c, by: 'model' };
+    if (c.type === 'arguments') {
+      const kept = [];
+      for (const x of old.items) {
+        const id = into.get(x.id) ?? x.id;
+        if (c.items.some((y) => y.id === id) && !kept.some((y) => y.id === id)) kept.push({ id, level: x.level });
+      }
+      const added = c.items.filter((x) => !kept.some((y) => y.id === x.id));
+      return { ...c, items: [...kept, ...added], by: 'author', updatedAt: old.updatedAt };
+    }
+    const passages = c.passages.map((x) => {
+      const was = old.passages.find((y) => y.name.toLowerCase() === x.name.toLowerCase());
+      return was ? { ...x, tone: was.tone } : x;
+    });
+    const options = [...new Set([...c.options, ...passages.map((x) => x.tone)])];
+    return { ...c, passages, options, by: 'author', updatedAt: old.updatedAt };
+  });
+}
+// The components as the text writer reads them.
+export function componentsText(roundData) {
+  const byId = new Map(roundData.intents.map((x) => [x.id, x]));
+  const parts = [];
+  for (const c of roundData.components ?? []) {
+    if (c.type === 'arguments') {
+      const lines = c.items.filter((x) => byId.get(x.id)?.active).map((x, i) => `${i + 1}. ${byId.get(x.id).text} (${x.level})`);
+      if (lines.length) parts.push(`Order and weight of the arguments:\n${lines.join('\n')}`);
+    } else if (c.type === 'tones') {
+      parts.push(`Tone per passage:\n${c.passages.map((x) => `- ${x.name}: ${x.tone}`).join('\n')}`);
+    }
+  }
+  return parts.join('\n\n');
+}
+const componentsInput = (roundData) => {
+  const set = (roundData.components ?? []).filter((c) => c.by === 'author').map(({ by, updatedAt, ...c }) => c);
+  return set.length ? `Settings the author made (keep them; place new intents into them):\n${JSON.stringify(set)}` : '';
+};
+
 // Structure (Write Version): all active intents → one plan for the next version. Returns { changes } or
 // throws; the caller then writes from the intents as they are.
 export async function structureIntents({ config, service, roundData, task, signal }) {
   const active = roundData.intents.filter((x) => x.active);
   const lastN = [...roundData.turns].reverse().find((t) => t.status === 'done' && t.intents)?.n ?? 0;
   const newIds = new Set(active.filter((x) => !x.sentIn?.includes(lastN) || !lastN).map((x) => x.id));
-  const content = [taskText(task), groupsText(config, roundData), `Intents that are on:\n${intentsJson(active, newIds)}`].join('\n\n');
+  const content = [taskText(task), groupsText(config, roundData), `Intents that are on:\n${intentsJson(active, newIds)}`, componentsInput(roundData)].filter(Boolean).join('\n\n');
   const out = await service.structured({
     kind: 'structureIntents',
     instructions: config.ai.intents.structurePrompt,
@@ -258,6 +347,10 @@ export async function structureIntents({ config, service, roundData, task, signa
   const before = active.map((x) => ({ id: x.id, ...fieldsOf(x) }));
   const { changes } = reconcile({ roundData, items: out.data?.intents ?? [], sentIds: new Set(active.map((x) => x.id)), transcript: '', cause: 'structure', now });
   settleGroups(roundData, ids(out.data?.groups).map((g) => groupName(roundData, g)));
+  const live = new Set(roundData.intents.filter((x) => x.active).map((x) => x.id));
+  const fresh = (out.data?.components ?? []).map((c) => cleanComponent(c, live)).filter(Boolean)
+    .filter((c, i, all) => all.findIndex((y) => y.type === c.type) === i); // one of each type
+  roundData.components = mergeComponents(roundData.components ?? [], fresh, changes.merged);
   roundData.undo = null; // a new version starts a new round: what came before it cannot be undone
   return { changes, before, usage: out.usage ?? null, attempts: out.attempts, attempt: out.attempt };
 }
@@ -279,7 +372,7 @@ export function intentRoutes(app) {
     queues.set(key, run.catch(() => {}));
     return run;
   };
-  const view = (roundData) => ({ intents: roundData.intents, ...groupsView(roundData) });
+  const view = (roundData) => ({ intents: roundData.intents, ...groupsView(roundData), components: roundData.components ?? [] });
   // Keeps what is needed to undo this change (only the last one can be undone).
   const keepUndo = (roundData, kind, undo, now) => {
     if (!undo.added.length && !undo.before.length) return null;
@@ -431,6 +524,38 @@ export function intentRoutes(app) {
     });
   });
 
+  // The participant's settings in the components: the order and levels of the arguments, a tone per
+  // passage. Only components the structuring step made can be changed, and only within what they offer.
+  r.put('/components', requireSession(store), async (req, res) => {
+    const p = parse(req, res, { needText: false });
+    if (!p) return;
+    const { round, key, roundData } = p;
+    const sent = Array.isArray(req.body?.components) ? req.body.components : null;
+    if (!sent) return res.status(400).json({ error: 'bad_components' });
+    const now = new Date().toISOString();
+    const before = roundData.components ?? [];
+    roundData.components = before.map((c) => {
+      const next = sent.find((x) => x?.type === c.type);
+      if (!next) return c;
+      if (c.type === 'arguments') {
+        // The same arguments in a new order, each main or supporting.
+        const items = (Array.isArray(next.items) ? next.items : []).map((x) => ({ id: clean(x?.id), level: LEVELS.includes(x?.level) ? x.level : null }));
+        const sameSet = items.length === c.items.length && items.every((x) => x.level && c.items.some((y) => y.id === x.id)) && new Set(items.map((x) => x.id)).size === items.length;
+        if (!sameSet || JSON.stringify(items) === JSON.stringify(c.items)) return c;
+        return { ...c, items, by: 'author', updatedAt: now };
+      }
+      // The same passages, each with one of the offered tones.
+      const passages = (Array.isArray(next.passages) ? next.passages : []).map((x, i) => ({ name: c.passages[i]?.name, tone: clean(x?.tone) }));
+      const valid = passages.length === c.passages.length && passages.every((x) => c.options.includes(x.tone));
+      if (!valid || passages.every((x, i) => x.tone === c.passages[i].tone)) return c;
+      return { ...c, passages, by: 'author', updatedAt: now };
+    });
+    await store.update(req.study, (s) => { s.rounds[key] = roundData; });
+    logger.forSession(req.study, round).write('server.components.set', { before: before.map(({ updatedAt, ...c }) => c), after: roundData.components.map(({ updatedAt, ...c }) => c) });
+    res.json({ components: roundData.components });
+  });
+
+  // After /components, so that path is not taken for an intent id.
   r.put('/:id', requireSession(store), async (req, res) => {
     const p = parse(req, res, { needText: false });
     if (!p) return;

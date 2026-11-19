@@ -304,6 +304,43 @@ body.fh-app { background: var(--sapBackgroundColor); }
 @keyframes ic-fresh { from { box-shadow: 0 0 0 0.1875rem var(--ic-c); } to { box-shadow: 0 0 0 0 transparent; } }
 @media (prefers-reduced-motion: reduce) { .ic-card.is-fresh { animation: none; outline: 0.125rem solid var(--ic-c); } }
 
+/* Generative UI components (gen-ui): their pills sit in the group row, the component opens below. */
+.ic-group--comp { --ic-c: var(--sapAccentColor10); border-style: dashed; }
+.ic-group--comp.has-new { --ic-c: var(--sapHighlightColor); }
+.ic-group__glyph { width: 0.625rem; height: 0.625rem; border-radius: 0.125rem; background: var(--ic-s); flex: none; }
+.ic-comp { padding: var(--sapContent_Space_Tiny); border-radius: var(--sapElement_BorderCornerRadius); background: var(--sapGroup_ContentBackground); overflow-x: auto; }
+.gc { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
+.gc__hint { margin: 0; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
+.gc-args { display: grid; grid-template-columns: max-content repeat(var(--gc-n), minmax(11rem, 1fr)); gap: 0.375rem; align-items: stretch; }
+.gc-args__corner { min-width: 0; }
+.gc-args__pos { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; text-align: center; }
+.gc-args__level { align-self: center; padding-inline-end: var(--sapContent_Space_Tiny); font-family: var(--font-semibold); font-weight: 600; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
+.gc-cell { min-height: 3.25rem; border-radius: var(--sapElement_BorderCornerRadius); display: flex; }
+.gc-cell.is-empty { border: var(--sapElement_BorderWidth) dashed var(--sapGroup_ContentBorderColor); }
+.gc-cell.is-over { background: color-mix(in srgb, var(--sapHighlightColor) 10%, transparent); border-color: var(--sapHighlightColor); }
+.gc-arg {
+  flex: 1; display: flex; flex-direction: column; gap: 0.25rem; padding: 0.375rem 0.5rem; cursor: grab;
+  background: var(--sapTile_Background); border: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor);
+  border-inline-start: 0.25rem solid var(--ic-c); border-radius: var(--sapElement_BorderCornerRadius);
+}
+.gc-arg:focus-visible { outline: var(--sapContent_FocusWidth) solid var(--sapContent_FocusColor); outline-offset: 0.125rem; }
+.gc-arg.is-dragging { opacity: 0.5; }
+.gc-arg__text { font-family: var(--font-semibold); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.gc-arg__tools { display: flex; align-items: center; gap: 0.125rem; margin-top: auto; }
+.gc-arg__btn { min-width: 1.75rem; padding: 0; }
+.gc-arg__level { margin-inline-start: auto; padding-inline: 0.375rem; font-size: var(--sapFontSmallSize); }
+.gc-tones { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(12rem, 1fr); gap: var(--sapContent_Space_Tiny); }
+.gc-tone { display: flex; flex-direction: column; gap: 0.375rem; padding: 0.375rem 0.5rem; background: var(--sapTile_Background); border: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); border-radius: var(--sapElement_BorderCornerRadius); }
+.gc-tone__name { margin: 0; display: flex; align-items: baseline; gap: 0.375rem; font-family: var(--font-bold); font-weight: 700; font-size: var(--sapFontSize); color: var(--sapTitleColor); }
+.gc-tone__options { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.gc-tone__option {
+  padding: 0.125rem 0.5rem; border-radius: 0.75rem; cursor: pointer; font: inherit; font-size: var(--sapFontSmallSize);
+  border: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); background: var(--sapTile_Background); color: var(--sapContent_LabelColor);
+}
+.gc-tone__option.is-on { border-color: var(--sapHighlightColor); background: color-mix(in srgb, var(--sapHighlightColor) 12%, var(--sapTile_Background)); color: var(--sapTextColor); font-family: var(--font-semibold); font-weight: 600; }
+.gc-tone__option:focus-visible { outline: var(--sapContent_FocusWidth) solid var(--sapContent_FocusColor); outline-offset: 0.125rem; }
+.gc-tone__option:disabled, .gc-arg__btn:disabled { cursor: default; }
+
 /* Task sidebar: fold, resize and highlight. */
 .ts { position: relative; flex: none; display: flex; width: var(--ts-width, 22rem); min-height: 0; background: var(--sapTile_Background); border-inline-end: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); }
 .ts:not(.is-dragging) { transition: width 160ms ease; }

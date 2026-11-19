@@ -5,11 +5,12 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
 });
 
 const TRANSCRIPTS = [
-  'Write a short email to the customer that picks up where our last conversation ended.',
   'Write in a casual tone, because we have a long-standing relationship.',
-  'Make it more personal and mention the concern about implementation effort.',
+  'Stress continuity, because switching to a competitor costs time and money.',
+  'Give an example of the nurses who rely on the platform every day.',
   'Make the tone of the email more professional.',
-  'Actually, shorten the email to five sentences.',
+  'Hint at continuity subtly by bringing their IT department into the discussion.',
+  'Actually, make the tone of the email friendly but professional.',
 ];
 
 const RESPONSES = [
@@ -62,13 +63,20 @@ export function createMockService({ config }) {
         const list = json('Intents that are on');
         const out = [];
         for (const x of list) {
-          const into = out.find((y) => y.group === x.group && shares(y.text, x.text) && y.text.length + x.text.length < 120);
+          const into = out.find((y) => y.group === x.group && !/tone/i.test(x.group) && shares(y.text, x.text) && y.text.length + x.text.length < 120);
           if (into) {
             Object.assign(into, { text: cap(short(`${x.text}, ${into.text.charAt(0).toLowerCase()}${into.text.slice(1)}`, 8)), reason: into.reason || x.reason });
             into.mergedFrom.push(x.id);
           } else out.push({ id: x.id, mergedFrom: [], group: x.group, text: x.text, reason: x.reason, nuance: x.nuance });
         }
-        return { data: { groups: [...new Set(out.map((x) => x.group))], intents: out }, usage: null };
+        // Components: argument order when there are two or more arguments; tone per passage when there
+        // are two or more tones.
+        const components = [];
+        const args = out.filter((x) => /argument/i.test(x.group));
+        if (args.length >= 2) components.push({ type: 'arguments', title: 'Order of the arguments', items: args.map((x) => ({ id: x.id, level: /main/i.test(x.group) ? 'main' : 'supporting' })), passages: [], options: [] });
+        const tones = out.filter((x) => /tone/i.test(x.group)).map((x) => x.text).slice(0, 4);
+        if (tones.length >= 2) components.push({ type: 'tones', title: 'Tone per passage', items: [], passages: [{ name: 'Opening', tone: tones[0] }, { name: 'Offer', tone: tones.at(-1) }, { name: 'Closing', tone: tones[0] }], options: tones });
+        return { data: { groups: [...new Set(out.map((x) => x.group))], intents: out, components }, usage: null };
       }
       const current = json('Current intents');
       const groupFor = (p) => (/tone|formal|casual|friendl|personal|confiden|warm|polite|professional/i.test(p) ? 'Tone'
@@ -85,7 +93,7 @@ export function createMockService({ config }) {
         if (hit && dropping) { data.removed.push(hit.id); return { data, usage: null }; }
         if (hit) { data.revised.push({ id: hit.id, mergedFrom: [], group: hit.group, text: cap(short(body)), reason: hit.reason, nuance: hit.nuance, quote: comment }); return { data, usage: null }; }
       }
-      const parts = comment.split(/(?<=[.!?])\s+|,?\s+and\s+(?:also\s+)?/i).map((s) => s.trim()).filter((s) => s.split(/\s+/).length >= 2);
+      const parts = comment.replace(/^(actually|instead|no|forget|drop)[,.]?\s*/i, '').split(/(?<=[.!?])\s+|,?\s+and\s+(?:also\s+)?/i).map((s) => s.trim()).filter((s) => s.split(/\s+/).length >= 2);
       for (const p of parts.slice(0, 3)) {
         // "X because Y" or "X, Y": Y is the reason.
         const [, ask = p, why = ''] = p.match(/^(.+?)(?:,?\s+because\s+|,\s+)(.+)$/i) ?? [];

@@ -141,7 +141,16 @@ export default {
         'the card in at most six words that names what the text should do, without filler and without the ' +
         'reason; reason: the author\'s reason in at most 15 words, an empty string if there is ' +
         'none; nuance: a qualifier in at most three words only when needed, else an empty string. Use the ' +
-        'language of the intents.',
+        'language of the intents. Also choose components that let the author steer the plan, from this ' +
+        'catalog and only when the plan calls for one. arguments, when the plan holds two or more ' +
+        'arguments: items lists the ids of all argument intents in the order the text should make them, ' +
+        'each with level main or supporting. tones, when the intents ask for different tones in different ' +
+        'passages, or for tones that pull apart: passages names the passages of the text in order (two to ' +
+        'five short names such as "Opening", "Offer" or "Closing") with the tone each should have, and ' +
+        'options lists the tones on offer (two to four short phrases taken from the intents). title: a ' +
+        'short heading for the component. Leave the fields a component does not use empty. If settings the ' +
+        'author made are given, keep their order, levels and tones, and place new intents where they fit. ' +
+        'Return no component when none is needed.',
       annotatePrompt:
         'You update one intent (a short change request for a draft, with the reason the author gave for ' +
         'it) according to a spoken annotation. The annotation was transcribed automatically and may ' +
@@ -155,7 +164,9 @@ export default {
         'list. The building blocks are sorted by the part of the text they shape, and together they are ' +
         'everything the author wants from the text. A qualifier in brackets says how to carry a block out ' +
         '(for example "implicit": the point is made without being stated). Some blocks give the author\'s ' +
-        'reason as "why": use it to decide how to carry the block out and what to emphasise. Where the building blocks say nothing, keep the starting draft as it ' +
+        'reason as "why": use it to decide how to carry the block out and what to emphasise. If an order ' +
+        'and weight of the arguments is given, make the arguments in that order, the main ones with weight ' +
+        'and the supporting ones briefly. If a tone per passage is given, write each passage in its tone. Where the building blocks say nothing, keep the starting draft as it ' +
         'is. The starting draft may contain placeholders in square brackets: fill one only when the ' +
         'building blocks give what it needs, otherwise keep it. Answer with the full text only, starting ' +
         'with its first line: do not introduce it, describe what you changed or add notes.',
