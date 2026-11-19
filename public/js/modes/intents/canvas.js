@@ -462,7 +462,9 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       g.el.setAttribute('aria-label', t('intents.groupLabel', { name: groupName(key), active: on, total: members.length }));
       g.el.setAttribute('aria-expanded', String(open));
       g.el.classList.toggle('is-open', open);
-      g.mark.hidden = !members.some((m) => ['new', 'changed'].includes(stateOf(m.intent)));
+      const hasNew = members.some((m) => ['new', 'changed'].includes(stateOf(m.intent)));
+      g.mark.hidden = !hasNew;
+      g.el.classList.toggle('has-new', hasNew);
       return g.el;
     });
     place(groupRow, ordered);

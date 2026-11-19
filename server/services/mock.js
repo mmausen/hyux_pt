@@ -49,7 +49,7 @@ export function createMockService({ config }) {
       await sleep(latency(), signal);
       const text = String(input.at(-1)?.content ?? '');
       const said = (label) => (text.split(`${label}:\n`)[1] ?? '').split('\n\n')[0].trim();
-      const short = (s, n = 12) => s.split(/\s+/).slice(0, n).join(' ').replace(/[.,;:]+$/, '');
+      const short = (s, n = 6) => s.replace(/^(please|also|maybe|i want you to|can you|could you)\s+/i, '').split(/\s+/).slice(0, n).join(' ').replace(/[.,;:]+$/, '');
       const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
       const json = (label) => { try { return JSON.parse(said(label) || '[]'); } catch { return []; } };
       const words = (s) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
@@ -64,17 +64,17 @@ export function createMockService({ config }) {
         for (const x of list) {
           const into = out.find((y) => y.group === x.group && shares(y.text, x.text) && y.text.length + x.text.length < 120);
           if (into) {
-            Object.assign(into, { text: cap(short(`${x.text} while keeping ${into.text.charAt(0).toLowerCase()}${into.text.slice(1)}`, 15)), reason: into.reason || x.reason });
+            Object.assign(into, { text: cap(short(`${x.text}, ${into.text.charAt(0).toLowerCase()}${into.text.slice(1)}`, 8)), reason: into.reason || x.reason });
             into.mergedFrom.push(x.id);
           } else out.push({ id: x.id, mergedFrom: [], group: x.group, text: x.text, reason: x.reason, nuance: x.nuance });
         }
         return { data: { groups: [...new Set(out.map((x) => x.group))], intents: out }, usage: null };
       }
       const current = json('Current intents');
-      const groupFor = (p) => (/tone|formal|casual|friendl|personal|confiden|warm|polite/i.test(p) ? 'Tone'
-        : /shorten|shorter|longer|order|end with|start with|opening|closing|paragraph|sentences|structure/i.test(p) ? 'Structure'
-          : /mention|number|figure|date|price list|attach|question|call/i.test(p) ? 'Details'
-            : /cost|value|benefit|price|argu|case|retain|save|concern|continuity/i.test(p) ? 'Main arguments' : 'Supporting arguments');
+      const groupFor = (p) => (/tone|formal|casual|friendl|personal|confiden|warm|polite|professional/i.test(p) ? 'Tone'
+        : /short|longer|order|end with|start with|opening|closing|paragraph|sentences|structure|picks up/i.test(p) ? 'Structure'
+          : /example|evidence|case study|data|survey|figures show/i.test(p) ? 'Supporting arguments'
+            : /cost|value|benefit|argu|retain|save|concern|continuity|risk|effort/i.test(p) ? 'Main arguments' : 'Details');
       const comment = said('New comment');
       const data = { added: [], revised: [], removed: [] };
       const revising = /^(actually|instead|no[,.]?)\b/i.test(comment);

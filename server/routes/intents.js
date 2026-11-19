@@ -222,11 +222,17 @@ function applyUndo(roundData, undo, now) {
   }
 }
 
+// The groups the model chooses from: those the round already has, in order, and the suggested parts with
+// what each one covers. Both are always listed, so a round that has one group so far does not pull every
+// new intent into it.
 const groupsText = (config, roundData) => {
-  const groups = roundData.groups?.length ? roundData.groups : null;
-  return groups
-    ? `Groups (the parts of the text, in order):\n${groups.map((g) => `- ${g}`).join('\n')}`
-    : `Groups: none yet. Typical parts of such a text:\n${config.ai.intents.suggestedGroups.map((g) => `- ${g.name}: ${g.about}`).join('\n')}`;
+  const groups = roundData.groups ?? [];
+  const suggested = config.ai.intents.suggestedGroups.filter((g) => !groups.some((x) => x.toLowerCase() === g.name.toLowerCase()));
+  const about = (name) => config.ai.intents.suggestedGroups.find((g) => g.name.toLowerCase() === name.toLowerCase())?.about;
+  return [
+    groups.length ? `Groups the text has so far, in order:\n${groups.map((g) => `- ${g}${about(g) ? `: ${about(g)}` : ''}`).join('\n')}` : 'Groups the text has so far: none.',
+    suggested.length ? `Other parts a text like this has (use one when the intent belongs there):\n${suggested.map((g) => `- ${g.name}: ${g.about}`).join('\n')}` : '',
+  ].filter(Boolean).join('\n\n');
 };
 const intentsJson = (list, newIds = null) => JSON.stringify(list.map((x) => ({
   id: x.id, group: groupOf(x), text: x.text, reason: x.reason ?? '', nuance: x.nuance ?? '', ...(newIds ? { new: newIds.has(x.id) } : {}),

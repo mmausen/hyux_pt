@@ -89,11 +89,11 @@ export default {
       // Typical parts of the text, offered to the model until the round has groups of its own. Groups
       // are generative: the model names them, and once named they stay.
       suggestedGroups: [
-        { name: 'Structure', about: 'order, length, sections, opening and closing' },
-        { name: 'Tone', about: 'voice, formality, warmth, confidence and wording' },
-        { name: 'Main arguments', about: 'the central points the text makes, openly or implicitly' },
-        { name: 'Supporting arguments', about: 'secondary points, examples and evidence' },
-        { name: 'Details', about: 'facts, figures, names, dates and the call to action' },
+        { name: 'Structure', about: 'order, length, sections, opening and closing of the text' },
+        { name: 'Tone', about: 'how the text sounds: formality, warmth, confidence, wording' },
+        { name: 'Main arguments', about: 'the central reasons the reader should agree or act, made openly or implicitly' },
+        { name: 'Supporting arguments', about: 'evidence, examples and secondary points that back a main argument' },
+        { name: 'Details', about: 'facts, figures, names, dates, attachments and the call to action' },
       ],
       collectPrompt:
         'You collect the author\'s intents for a text they write with an assistant. Intents are the building ' +
@@ -107,9 +107,13 @@ export default {
         'several current intents into one, list the other ids in mergedFrom. If the author clearly takes an ' +
         'intent back, list its id in removed. When in doubt, add. Never revise an intent only because a new ' +
         'one touches the same aspect: bringing them together comes later. For every intent: group, the part ' +
-        'of the text it shapes, using a name from the groups when one fits, else a short new name in the ' +
-        'language of the comment; text, what the text should do, as an imperative in at most 15 words, with ' +
-        'references such as "that part" resolved from the draft; reason, why the author wants it, in at most ' +
+        'of the text it shapes, chosen by what the intent changes and matched against the descriptions of ' +
+        'the groups (an existing group, or one of the other parts); never put an intent into a group only ' +
+        'because it is the only one so far, and use a short new name in the language of the comment only ' +
+        'for a part none covers; text, a short title for the card in at most six words that names what the ' +
+        'text should do, without filler and without the reason (for example "Professional but friendly ' +
+        'tone" or "Mention IT department in passing"), with references such as "that part" resolved from ' +
+        'the draft; reason, why the author wants it, in at most ' +
         '15 words, only from what the author said or clearly meant, an empty string if there is none; ' +
         'nuance, a qualifier in at most three words (for example "implicit" or "in passing") only when the ' +
         'author asks for one, else an empty string; quote, the words of the comment it comes from, copied ' +
@@ -122,24 +126,26 @@ export default {
         '(JSON, each with an id; new: true marks intents collected since the last version). Return the ' +
         'groups in the order they shape the text, and every intent with its group. Keep the architecture ' +
         'stable: keep existing groups, their names and their order; add a group only for a part of the text ' +
-        'none covers, and leave out a group only when no intent is left in it. Bring the intents together: ' +
+        'none covers, and leave out a group only when no intent is left in it. Put every intent into the ' +
+        'group whose description matches what it changes, and move it when it sits in the wrong one. Bring the intents together: ' +
         'an intent that does not conflict with others stays as it is, with its id. Intents that pull the ' +
         'same aspect in different directions on a spectrum become one intent at the position the author\'s ' +
         'latest words point to, keeping what the earlier one still adds (a casual tone and then a ' +
-        'professional one become "Use a professional but friendly tone"). An intent that changes how ' +
+        'professional one become "Professional but friendly tone"). An intent that changes how ' +
         'another point is made joins that point, at the level the point has in the text, and says the ' +
         'concrete move (making continuity a subtle point by bringing in their IT department becomes ' +
         '"Mention the IT department in passing", nuance "implicit", in the group of the main arguments). ' +
         'Intents that say the same thing become one. A merged intent keeps the id of one of them, lists the ' +
         'other ids in mergedFrom and keeps their reasons. Never drop what the author asked for unless a ' +
-        'newer intent replaces it, and never add a request the author did not make. text: an imperative in ' +
-        'at most 15 words; reason: the author\'s reason in at most 15 words, an empty string if there is ' +
+        'newer intent replaces it, and never add a request the author did not make. text: a short title for ' +
+        'the card in at most six words that names what the text should do, without filler and without the ' +
+        'reason; reason: the author\'s reason in at most 15 words, an empty string if there is ' +
         'none; nuance: a qualifier in at most three words only when needed, else an empty string. Use the ' +
         'language of the intents.',
       annotatePrompt:
         'You update one intent (a short change request for a draft, with the reason the author gave for ' +
         'it) according to a spoken annotation. The annotation was transcribed automatically and may ' +
-        'contain recognition errors. Return text, the updated intent as an imperative in at most 12 words, ' +
+        'contain recognition errors. Return text, the updated intent as a short title in at most six words, ' +
         'in the language of the intent: if the annotation replaces the intent, the new one; if it adds a ' +
         'detail, merged. Return reason in at most 15 words: the current reason, updated or extended if the ' +
         'annotation gives a new or further reason; never a reason of your own, and an empty string if ' +
