@@ -20,7 +20,7 @@ The prototype compares five ways of working with the AI on the same tasks. Every
 | **Customer** | [`customer`](https://github.com/mmausen/hyux_pt/tree/customer) | "Customer in the Room": the AI plays the reader of the draft (the customer) and only reacts, the way that person would while reading. **Ask Customer** returns two to five short first-person reactions ("This feels pushy."), each tied to an exact passage, which is highlighted in the draft, and marked positive, neutral or negative. The participant switches reactions on or off, responds to them by voice and adds general instructions. **Send Changes** writes the next version from these. The customer never suggests wording: the participant decides what to change. A switcher picks the customer persona (for example the CFO or a sceptical buyer). |
 | **Compare** | [`compare`](https://github.com/mmausen/hyux_pt/tree/compare) | Two similar but not identical versions stand side by side. The participant picks the one they prefer and says what they like most about it. This feeds a hidden preference profile. The picked version stays, and the other is replaced by a new one written from the profile. Step by step the profile gets richer and the versions converge, until the participant accepts one as final. |
 
-To try an interaction, check out its branch. Each branch has its own interaction as the default `interaction.mode` in `config.js`. The tutorial exists only for `voice`, `intents` and `customer`.
+The branch `all-modes` brings them together on top of `gen-ui`: every interaction is in one build (`intents` with the generative UI components, `highlight`, `slider`, `customer`, `compare`, and `voice`). To switch between them, run with `DEV_MODE=true`, start a session (**Skip ID** in the dev panel), pick the mode under **Interaction Mode** in the dev panel and jump to a task. The mode belongs to the session, and each mode keeps its own state in the round, so try each mode in its own round or start a **New Session** before switching. New sessions start in `interaction.mode` from `config.js` (`intents`). The tutorial exists only for `voice`, `intents` and `customer`; the other modes skip it.
 
 ---
 
@@ -216,7 +216,7 @@ The tasks for a session are assigned when it starts and stored with it. Changing
 #### `interaction`
 | Option | Meaning |
 |---|---|
-| `mode` | Default interaction mode for new sessions (currently `'compare'` on this branch): a folder in `public/js/modes/` (`'voice'`, `'intents'` or `'compare'`, see [Interaction modes](#interaction-modes)). The dev panel can switch the current session. |
+| `mode` | Default interaction mode for new sessions (currently `'intents'`): a folder in `public/js/modes/` (`'voice'`, `'intents'`, `'highlight'`, `'slider'`, `'customer'` or `'compare'`, see [Interaction modes](#interaction-modes)). The dev panel can switch the current session. |
 | `recordingMode` | `'pushToTalk'`: hold the button or the Space key. Space works only when focus isn't in a text field. `'toggle'`: select once to start and again to stop. The tutorial text follows this setting. |
 | `maxRecordingSeconds` | A recording stops automatically after this long and is transcribed. |
 
