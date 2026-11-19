@@ -192,7 +192,6 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .ic-panel__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sapContent_Space_Tiny); }
 .ic-panel__count { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
 .ic-panel__body { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); padding: 0.125rem 0.125rem var(--sapContent_Space_Small); }
-.ic-panel__body > .ic-topics { flex: none; }
 .ic-pending { display: flex; flex-direction: column; gap: 0.25rem; padding: var(--sapContent_Space_Tiny) var(--sapContent_Space_Small); border: var(--sapElement_BorderWidth) dashed var(--sapGroup_ContentBorderColor); border-radius: var(--sapElement_BorderCornerRadius); }
 .ic-pending__text { font-size: var(--sapFontSmallSize); font-style: italic; color: var(--sapContent_LabelColor); line-height: 1.45; overflow-wrap: anywhere; }
 .ic-error { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
@@ -216,6 +215,8 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .ic-card__quote { font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); }
 .ic-card__quote summary { cursor: pointer; width: fit-content; color: var(--sapLinkColor); list-style-position: inside; }
 .ic-card__quote summary:hover { text-decoration: underline; }
+.ic-card__quotes { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.25rem; }
+.ic-card__quotes q { display: block; padding-inline-start: var(--sapContent_Space_Tiny); border-inline-start: 2px solid var(--sapGroup_ContentBorderColor); font-style: italic; line-height: 1.45; overflow-wrap: anywhere; }
 .ic-card__quote p { margin: 0.25rem 0 0; padding-inline-start: var(--sapContent_Space_Tiny); border-inline-start: 2px solid var(--sapGroup_ContentBorderColor); font-style: italic; line-height: 1.45; overflow-wrap: anywhere; }
 .ic-card__side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.125rem; }
 .ic-card__state { display: inline-flex; align-items: center; gap: 0.3125rem; min-height: 1.5rem; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); white-space: nowrap; }
@@ -226,14 +227,16 @@ body.fh-app { background: var(--sapBackgroundColor); }
 .ic-card[data-state="changed"] .ic-card__state { color: var(--sapCriticalTextColor); }
 .ic-card[data-state="applied"] .ic-card__dot { background: var(--sapPositiveElementColor, var(--sapPositiveTextColor)); }
 /* The microphone shows on hover or focus, while it is in use, in the tour and on touch screens. */
-.ic-card__annotate { touch-action: none; user-select: none; -webkit-user-select: none; opacity: 0; transition: opacity 120ms; }
-.ic-card:hover .ic-card__annotate, .ic-card:focus-within .ic-card__annotate, .ic-card.is-recording .ic-card__annotate,
-.ic-card.is-busy .ic-card__annotate, .vc--static .ic-card__annotate { opacity: 1; }
-@media (hover: none) { .ic-card__annotate { opacity: 1; } }
+.ic-card__tools { display: flex; align-items: center; }
+.ic-card__annotate { touch-action: none; user-select: none; -webkit-user-select: none; }
+.ic-card__annotate, .ic-card__delete { opacity: 0; transition: opacity 120ms; }
+.ic-card:hover :is(.ic-card__annotate, .ic-card__delete), .ic-card:focus-within :is(.ic-card__annotate, .ic-card__delete),
+.ic-card.is-recording .ic-card__annotate, .ic-card.is-busy .ic-card__annotate, .vc--static :is(.ic-card__annotate, .ic-card__delete) { opacity: 1; }
+@media (hover: none) { .ic-card__annotate, .ic-card__delete { opacity: 1; } }
 .ic-card__annotate.is-recording, .ic-card__annotate[aria-pressed="true"] { color: var(--sapHighlightColor); }
 .ic-card__status { padding-inline-start: 2rem; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
 .ic-card__status .fh-msg-agent__thinking { font-size: var(--sapFontSmallSize); }
-@media (prefers-reduced-motion: reduce) { .ic-card__annotate { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .ic-card__annotate, .ic-card__delete { transition: none; } }
 .ic .vc-send { min-width: 14rem; }
 
 /* ---------- Intents mode, split layout ----------
@@ -241,31 +244,51 @@ body.fh-app { background: var(--sapBackgroundColor); }
    the intents (lower half). The controls bar with send, finish and the timer spans the full width below. */
 .vc.ics { max-width: none; margin: 0; padding: 0; gap: 0; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
 .ics > .vc-controls { grid-column: 1 / -1; padding-inline: var(--sapContent_Space_Medium); }
-.ics-work { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1fr); padding-inline: var(--sapContent_Space_Medium); }
+.ics-work { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; /* the intents take what they need, the draft the rest */ padding-inline: var(--sapContent_Space_Medium); }
 .ics-work > .vc-notices { grid-row: 1; padding-top: var(--sapContent_Space_Tiny); } /* empty: display none, so every child names its row */
 .ics-result { grid-row: 2; min-height: 0; display: flex; flex-direction: column; padding-top: var(--sapContent_Space_Small); }
 .ics .vc-turn__left { max-width: 56rem; }
-.ics-intents { grid-row: 4; min-height: 0; display: flex; flex-direction: column; }
+.ics-intents { grid-row: 4; min-height: 0; max-height: 45vh; display: flex; flex-direction: column; }
 .ics-divider { grid-row: 3; position: relative; display: flex; justify-content: center; padding-block: var(--sapContent_Space_Tiny); }
 .ics-divider::before { content: ''; position: absolute; inset-inline: 0; top: 50%; border-top: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); }
 .ics-divider .vc-rec { position: relative; padding-inline: var(--sapContent_Space_Small); background: var(--sapBackgroundColor); }
 
-/* Topic sections of the intents: collapsible, the cards of a section next to each other. */
-.ic-topics { display: flex; flex-direction: column; gap: var(--sapContent_Space_Small); }
-.ic-topic { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
-.ic-topic__head { margin: 0; font: inherit; }
-.ic-topic__toggle {
-  display: flex; align-items: center; gap: 0.25rem; width: 100%; padding: 0.125rem 0.25rem; margin: 0; background: none; cursor: pointer;
-  border: 0; border-bottom: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); border-radius: 0;
-  font-family: var(--font-bold); font-weight: 700; font-size: var(--sapFontHeader6Size); color: var(--sapTitleColor); text-align: start;
+/* Intent groups: a row of colour-coded groups, and under it the cards of the open group in one row.
+   Each group carries a light accent (--ic-c), and its cards carry the same one. */
+[data-accent="1"] { --ic-c: var(--sapAccentColor1); }
+[data-accent="2"] { --ic-c: var(--sapAccentColor2); }
+[data-accent="3"] { --ic-c: var(--sapAccentColor3); }
+[data-accent="4"] { --ic-c: var(--sapAccentColor4); }
+[data-accent="5"] { --ic-c: var(--sapAccentColor5); }
+[data-accent="6"] { --ic-c: var(--sapAccentColor6); }
+[data-accent="7"] { --ic-c: var(--sapAccentColor7); }
+[data-accent="8"] { --ic-c: var(--sapAccentColor8); }
+[data-accent="9"] { --ic-c: var(--sapAccentColor9); }
+[data-accent="10"] { --ic-c: var(--sapAccentColor10); }
+.ic-groups { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.ic-group {
+  display: inline-flex; align-items: center; gap: 0.375rem; min-height: 1.75rem; padding: 0.125rem 0.75rem; margin: 0; cursor: pointer;
+  border: var(--sapElement_BorderWidth) solid color-mix(in srgb, var(--ic-c) 35%, transparent); border-radius: 1rem;
+  background: color-mix(in srgb, var(--ic-c) 7%, var(--sapTile_Background)); color: var(--sapTextColor);
+  font-family: var(--font-semibold); font-weight: 600; font-size: var(--sapFontSize);
 }
-.ic-topic__toggle:hover { background: var(--sapList_Hover_Background); }
-.ic-topic__toggle:focus-visible { outline: var(--sapContent_FocusWidth) solid var(--sapContent_FocusColor); outline-offset: -0.125rem; }
-.ic-topic__count { margin-inline-start: auto; font-family: var(--font-sans); font-weight: 400; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
-.ic-topic__chevron { transition: transform 120ms; }
-.ic-topic__toggle:not(.is-open) .ic-topic__chevron { transform: rotate(-90deg); }
-@media (prefers-reduced-motion: reduce) { .ic-topic__chevron { transition: none; } }
-.ic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); align-items: start; gap: var(--sapContent_Space_Tiny); }
+.ic-group:hover { background: color-mix(in srgb, var(--ic-c) 14%, var(--sapTile_Background)); }
+.ic-group:focus-visible { outline: var(--sapContent_FocusWidth) solid var(--sapContent_FocusColor); outline-offset: 0.125rem; }
+.ic-group.is-open { background: color-mix(in srgb, var(--ic-c) 18%, var(--sapTile_Background)); border-color: var(--ic-c); }
+.ic-group__dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--ic-c); flex: none; }
+.ic-group__count { font-family: var(--font-sans); font-weight: 400; font-size: var(--sapFontSmallSize); color: var(--sapContent_LabelColor); font-variant-numeric: tabular-nums; }
+.ic-group__mark { width: 0.375rem; height: 0.375rem; border-radius: 50%; background: var(--sapInformativeElementColor, var(--sapHighlightColor)); flex: none; }
+.ic-status { display: flex; flex-direction: column; gap: var(--sapContent_Space_Tiny); }
+.ic-hint { margin: 0; font-size: var(--sapFontSmallSize); color: var(--sapCriticalTextColor); }
+.ic-row {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(15rem, 19rem); align-items: start; gap: var(--sapContent_Space_Tiny);
+  overflow-x: auto; padding: var(--sapContent_Space_Tiny); border-radius: var(--sapElement_BorderCornerRadius);
+  background: color-mix(in srgb, var(--ic-c) 6%, transparent);
+}
+.ic-row .ic-card { border-inline-start: 0.25rem solid var(--ic-c); }
+.ic-card.is-fresh { animation: ic-fresh 2.4s ease-out; }
+@keyframes ic-fresh { from { box-shadow: 0 0 0 0.1875rem var(--ic-c); } to { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .ic-card.is-fresh { animation: none; outline: 0.125rem solid var(--ic-c); } }
 
 /* Task sidebar: fold, resize and highlight. */
 .ts { position: relative; flex: none; display: flex; width: var(--ts-width, 22rem); min-height: 0; background: var(--sapTile_Background); border-inline-end: var(--sapElement_BorderWidth) solid var(--sapGroup_ContentBorderColor); }

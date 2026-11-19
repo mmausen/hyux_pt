@@ -1,20 +1,19 @@
-// Intents mode canvas. The participant still thinks aloud, but their words become intent cards that they
-// can switch on and off and change by voice.
+// Intents mode canvas. The participant thinks aloud, and their words become intents: the building blocks
+// of the text, which they can switch on and off, change by voice and delete.
 //
 //   Layout (main-split): the task is a sidebar on the left (fold, resize, highlight). The work area on the
-//   right is split by a divider: the draft in the upper half, the intent cards in the lower half, and the
-//   microphone sits on the divider. The cards are sorted into collapsible topic sections (intent.topic);
-//   the cards of a section stand next to each other.
+//   right is split by a divider: the draft in the upper half, the intents in the lower half, and the
+//   microphone sits on the divider. The intents are grouped by topic (intent.topic): a row of colour-coded
+//   groups, and under it the cards of the open group, next to each other.
 //
 //   Start: the task's generic starting draft (task.scaffold; the server stores it as turn 1, kind
 //   'scaffold', via /api/intents/start). A task without one starts like the voice mode instead:
 //   recordings build an instruction, which is sent as spoken and produces the first draft.
-//   From then on: each recording is transcribed and split by the LLM into one or more intents, shown as
-//   cards next to the draft (newest first). A card has the request, the participant's reason and their
-//   own words (folded), a checkbox (on/off) and a hold-to-change microphone; an annotation is transcribed
-//   and the LLM rewrites the intent (and its reason) on release. Send hands the AI only the active intents
-//   (with their reasons) plus the latest draft (no history), which gives the next version. Cards stay;
-//   each card shows whether it is new, changed or in the draft. New recordings add new cards.
+//   From then on: each recording is transcribed and brought together with the current intents and the
+//   task (/api/intents/synthesize): the server returns the whole updated set, so a recording can add
+//   intents, change or merge existing ones, sort them into topics or take one back. Intents that are off
+//   stay as they are. Send writes the text anew from the starting draft and the active intents (no earlier
+//   version, no history), so each version is built from exactly the cards that are on.
 //
 // Same interface as the voice canvas (createCanvas(ctx, options) → { el, timerSlot, noticeSlot, regions,
 // getRegion, onFinishRequest, isBusy, whenIdle, setLocked, stopRecording, destroy }). Extra regions for the
@@ -41,16 +40,20 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   // Step 1 only: the instruction being built from recordings (as in the voice mode).
   let draft = sample ? (sample.draft && !sample.turns?.length ? [{ text: sample.draft }] : []) : [...(session.progress(round).draft ?? [])];
   let transcribing = false; // main record button
-  let inputError = null; // { key, retry }: main recording, transcription or extraction
-  let extracting = 0; // extractions running
-  const finding = []; // their transcripts, shown while the intents are being found
-  let noneFound = false; // the last recording held no intent
+  let inputError = null; // { key, retry }: main recording, transcription, synthesis or deleting
+  let synthesizing = 0; // syntheses running or waiting (they run one after the other)
+  let queue = Promise.resolve();
+  const finding = []; // their transcripts, shown while the intents are being updated
+  let noneFound = false; // the last recording changed nothing
+  const fresh = new Set(); // intents the last recording added or changed (highlighted for a moment)
+  let freshTimer = null;
   let locked = !live;
   let destroyed = false;
   const serverIntents = () => session.data?.rounds?.[String(round)]?.intents ?? [];
   let starting = false; // loading the starting draft
   let startError = false;
   let intents = sample ? (sample.intents ?? []).map((x, i) => ({ id: `s${i + 1}`, active: true, annotations: [], sentIn: [], ...x })) : [...serverIntents()];
+  let openGroup; // topic of the open group; null: all closed; undefined: not chosen yet
   const cards = new Map(); // id → card component
 
   const draftText = () => draft.map((d) => d.text).join(' ').trim();
@@ -97,7 +100,9 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   const versionOf = (n) => (conv.turns[0]?.kind === 'scaffold' ? n - 1 : n);
   const response = createLatestResponse({
     assistant: config.ai.assistantName, scroller, latest: conv.turns.at(-1),
-    label: (turn) => (turn.kind === 'scaffold' ? t('canvas.scaffoldLabel') : turn.n ? t('canvas.versionLabel', { n: versionOf(turn.n) }) : null),
+    label: (turn) => (turn.kind === 'scaffold' ? t('canvas.scaffoldLabel')
+      : turn.intents?.length ? t(turn.intents.length === 1 ? 'intents.versionFromOne' : 'intents.versionFrom', { n: versionOf(turn.n), count: turn.intents.length })
+        : turn.n ? t('canvas.versionLabel', { n: versionOf(turn.n) }) : null),
   });
   const controls = createControls(ctx, { showFinish, recInline: false });
   const { recButton, sendBtn, finishBtn, timerSlot } = controls;
@@ -142,40 +147,40 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   // ----- intent cards -----
   // A card shows the request, the participant's reason ("Why") and, folded, their own words. A card keeps
   // its DOM (and its recorder) across renders; render() only moves and updates it.
-  // State of an intent: 'new' (never sent), 'changed' (changed by voice since it was last sent),
-  // 'applied' (sent in the latest version and unchanged since: it is in the draft) or 'earlier' (last sent
-  // in an older version, e.g. it was off when the latest version was written). Applied cards go into a
-  // collapsed group under the others, so what is new stays in view. Switching a card on or off never
-  // moves it; a change by voice moves an applied card back up.
+  // State of an intent: 'new' (never sent), 'changed' (changed by a recording or by voice since it was last
+  // sent), 'applied' (sent in the latest version and unchanged since: it is in the draft) or 'earlier'
+  // (last sent in an older version, e.g. it was off when the latest version was written).
   function stateOf(intent) {
     const n = intent.sentIn?.at(-1);
     if (!n) return 'new';
     const sentAt = conv.turns.find((x) => x.n === n)?.sentAt;
-    if (sentAt && (intent.annotations ?? []).some((a) => a.at > sentAt)) return 'changed';
+    if (sentAt && (intent.updatedAt > sentAt || (intent.annotations ?? []).some((a) => a.at > sentAt))) return 'changed';
     return n === conv.turns.at(-1)?.n ? 'applied' : 'earlier';
   }
   const stateLabel = (intent, state) => (state === 'new' ? t('intents.tagNew') : state === 'changed' ? t('intents.tagChanged') : t('intents.tagSent', { n: versionOf(intent.sentIn.at(-1)) }));
+  const quotesOf = (x) => (Array.isArray(x.quotes) ? x.quotes : [x.quote || x.transcript || ''].filter(Boolean));
 
   function createCard(intent) {
     const id = intent.id;
     const textEl = h('p.ic-card__text');
     const reasonText = h('span');
     const reasonEl = h('p.ic-card__reason', h('span.ic-card__why', t('intents.why')), reasonText);
-    const quoteText = h('q');
-    const quoteEl = h('details.ic-card__quote', h('summary', t('intents.yourWords')), h('p', quoteText));
+    const quoteText = h('div.ic-card__quotes');
+    const quoteEl = h('details.ic-card__quote', h('summary', t('intents.yourWords')), quoteText);
     quoteEl.addEventListener('toggle', () => logEvent('intent.quoteToggled', { id, open: quoteEl.open }));
     const stateText = h('span');
     const stateEl = h('span.ic-card__state', h('span.ic-card__dot', { 'aria-hidden': 'true' }), stateText);
     const toggle = h('input', { type: 'checkbox' });
     const check = h('label.fh-checkbox.ic-card__check', toggle, h('span.fh-checkbox__box'));
     const annotateBtn = h('button.fh-btn.fh-btn--transparent.fh-btn--icon.ic-card__annotate', { type: 'button' }, icon('microphone'));
+    const deleteBtn = h('button.fh-btn.fh-btn--transparent.fh-btn--icon.ic-card__delete', { type: 'button' }, icon('decline'));
     const status = h('div.ic-card__status', { 'aria-live': 'polite' });
     const errorSlot = h('div');
     const el = h('li.ic-card', { dataset: { intent: id } },
       h('div.ic-card__row',
         check,
         h('div.ic-card__body', textEl, reasonEl, quoteEl),
-        h('div.ic-card__side', stateEl, annotateBtn)),
+        h('div.ic-card__side', stateEl, h('div.ic-card__tools', annotateBtn, deleteBtn))),
       status,
       errorSlot);
 
@@ -197,6 +202,26 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
         intentNow.active = !active;
         card.error = { key: 'intentToggle' };
         logEvent('intent.toggleFailed', { id, error: e.code ?? e.name });
+        remember();
+        render();
+      }
+    });
+
+    deleteBtn.addEventListener('click', async () => {
+      const i = intents.findIndex((x) => x.id === id);
+      if (i < 0) return;
+      const [gone] = intents.splice(i, 1);
+      inputError = null;
+      remember();
+      logEvent('intent.deleted', { id, active: gone.active, state: stateOf(gone), remaining: intents.length });
+      render();
+      try {
+        await api.intents.remove(round, id);
+      } catch (e) {
+        if (destroyed) return;
+        intents.splice(Math.min(i, intents.length), 0, gone);
+        inputError = { key: 'intentDelete' };
+        logEvent('intent.deleteFailed', { id, error: e.code ?? e.name });
         remember();
         render();
       }
@@ -243,33 +268,36 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       });
     }
 
-    card.parts = { textEl, reasonEl, reasonText, quoteEl, quoteText, stateEl, stateText, toggle, check, annotateBtn, status, errorSlot };
+    card.parts = { textEl, reasonEl, reasonText, quoteEl, quoteText, stateEl, stateText, toggle, check, annotateBtn, deleteBtn, status, errorSlot };
     return card;
   }
 
   const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 
   function updateCard(card, intent) {
-    const { textEl, reasonEl, reasonText, quoteEl, quoteText, stateEl, stateText, toggle, check, annotateBtn, status, errorSlot } = card.parts;
-    const inflight = Boolean(conv.inflight);
+    const { textEl, reasonEl, reasonText, quoteEl, quoteText, stateEl, stateText, toggle, check, annotateBtn, deleteBtn, status, errorSlot } = card.parts;
+    // While a version is written or a recording is brought into the intents, the cards hold still.
+    const inflight = Boolean(conv.inflight) || synthesizing > 0;
     const recording = card.recordingSeconds !== null;
     const state = stateOf(intent);
     card.el.classList.toggle('is-off', !intent.active);
     card.el.classList.toggle('is-busy', card.busy);
     card.el.classList.toggle('is-recording', recording);
     card.el.dataset.state = state;
+    card.el.classList.toggle('is-fresh', fresh.has(intent.id));
 
     setText(textEl, intent.text);
     reasonEl.hidden = !intent.reason;
     setText(reasonText, intent.reason ?? '');
-    const quote = intent.quote || intent.transcript || '';
-    quoteEl.hidden = !quote;
-    setText(quoteText, quote);
+    const quotes = quotesOf(intent);
+    quoteEl.hidden = !quotes.length;
+    if (quoteText.dataset.key !== quotes.join('\u0000')) {
+      quoteText.dataset.key = quotes.join('\u0000');
+      clear(quoteText).append(...quotes.map((q) => h('q', q)));
+    }
 
-    // An applied card sits in the "In the draft" group, which already says so: the dot is enough.
     const label = stateLabel(intent, state);
     setText(stateText, label);
-    stateText.className = state === 'applied' ? 'app-sr-only' : '';
     stateEl.title = label;
 
     toggle.checked = Boolean(intent.active);
@@ -285,6 +313,9 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     const action = recording && !ptt ? t('intents.annotateStop') : t(ptt ? 'intents.annotateHold' : 'intents.annotateStart');
     annotateBtn.title = action;
     annotateBtn.setAttribute('aria-label', `${action}: ${intent.text}`);
+    deleteBtn.disabled = locked || inflight || card.busy || recording;
+    deleteBtn.title = t('intents.delete');
+    deleteBtn.setAttribute('aria-label', t('intents.deleteLabel', { text: intent.text }));
 
     clear(status);
     if (recording) status.append(t('canvas.recordingStatus', { seconds: card.recordingSeconds }));
@@ -293,37 +324,47 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     clear(errorSlot).append(errorStrip(card.error) ?? '');
   }
 
-  // Topic sections: one collapsible section per topic, its cards next to each other. A topic is the
-  // intent's `topic` (empty: not sorted yet). Known topics come first in a fixed order (strings:
-  // intents.topicLabels); any other topic follows in the order it appeared.
+  // Groups: one per topic, in a row; under the row the cards of the open group, next to each other. One
+  // group is open at a time, and selecting the open group closes it. A topic is the intent's `topic`
+  // (empty: not sorted yet). Known topics come first in a fixed order (strings: intents.topicLabels); any
+  // other topic follows in the order it appeared. Each group has a light accent colour of its own, which its
+  // cards carry too.
   const topicLabels = raw('intents.topicLabels') ?? {};
   const topicOrder = Object.keys(topicLabels);
   const topicOf = (intent) => (typeof intent.topic === 'string' ? intent.topic.trim() : '');
   const topicName = (key) => (key === '' ? t('intents.topicUnsorted') : topicLabels[key] ?? key);
-  const sections = new Map(); // topic → section
-  const folded = new Set(); // topics the participant has folded
-  const topics = h('div.ic-topics');
+  // Accent colours (--sapAccentColor1…10): fixed for the known topics, from the rest for other topics.
+  const KNOWN_ACCENTS = [6, 3, 1, 7, 8];
+  const OTHER_ACCENTS = [5, 9, 4, 2];
+  const accentOf = (key) => {
+    if (key === '') return 10;
+    const i = topicOrder.indexOf(key);
+    if (i >= 0) return KNOWN_ACCENTS[i % KNOWN_ACCENTS.length];
+    let hash = 0;
+    for (const c of key) hash = (hash * 31 + c.charCodeAt(0)) % 997;
+    return OTHER_ACCENTS[hash % OTHER_ACCENTS.length];
+  };
+  const groups = new Map(); // topic → group button
+  const groupRow = h('div.ic-groups', { role: 'group', 'aria-label': t('intents.groupsLabel') });
+  const cardRow = h('ol.ic-list.ic-row', { id: `ic-row-${round}` });
 
-  function createSection(key) {
-    const list = h('ol.ic-list.ic-grid', { id: `ic-topic-${round}-${sections.size}` });
-    const name = h('span.ic-topic__name');
-    const count = h('span.ic-topic__count');
-    const toggle = h('button.ic-topic__toggle', { type: 'button', 'aria-controls': list.id }, icon('slim-arrow-down', 'ic-topic__chevron'), name, count);
-    toggle.addEventListener('click', () => {
-      const open = folded.has(key);
-      if (open) folded.delete(key); else folded.add(key);
-      logEvent('intents.topicToggled', { topic: key, open, count: list.children.length });
+  function createGroup(key) {
+    const name = h('span.ic-group__name');
+    const count = h('span.ic-group__count');
+    const mark = h('span.ic-group__mark', { 'aria-hidden': 'true' });
+    const el = h('button.ic-group', { type: 'button', 'aria-controls': cardRow.id, dataset: { topic: key, accent: String(accentOf(key)) } },
+      h('span.ic-group__dot', { 'aria-hidden': 'true' }), name, count, mark);
+    el.addEventListener('click', () => {
+      openGroup = openGroup === key ? null : key;
+      logEvent('intents.groupToggled', { topic: key, open: openGroup === key, count: intents.filter((x) => topicOf(x) === key).length });
       render();
     });
-    const el = h('section.ic-topic', { dataset: { topic: key } }, h('h3.ic-topic__head', toggle), list);
-    return { el, list, name, count, toggle };
+    return { el, name, count, mark };
   }
 
-  const panelCount = h('span.ic-panel__count');
+  const panelStatus = h('div.ic-status', { 'aria-live': 'polite' });
   const panelBody = h('div.ic-panel__body', { tabindex: '-1' });
-  const panel = h('aside.ic-panel', { dataset: { region: 'intents' }, 'aria-label': t('intents.panelLabel') },
-    h('div.ic-panel__head', h('div.vc-instruction__label', t('intents.panelLabel')), panelCount),
-    panelBody);
+  const panel = h('aside.ic-panel', { dataset: { region: 'intents' }, 'aria-label': t('intents.panelLabel') }, panelBody);
 
   // Puts the elements into a container in this order, moving only those that are out of place. Moving an
   // element takes the focus away from it, so the focus is put back.
@@ -336,65 +377,82 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     if (focused && focused !== document.activeElement && document.contains(focused)) focused.focus({ preventScroll: true });
   }
 
+  // The active intents differ from those the latest version was written from.
+  function changedSinceVersion() {
+    const used = conv.turns.at(-1)?.intents;
+    if (!used) return false;
+    const now = activeIntents();
+    if (now.length !== used.length) return true;
+    return now.some((x) => { const u = used.find((y) => y.id === x.id); return !u || (u.updatedAt ? u.updatedAt !== x.updatedAt : u.text !== x.text); });
+  }
+
   function renderPanel() {
-    const active = activeIntents().length;
-    panelCount.textContent = intents.length ? t('intents.count', { active, total: intents.length }) : '';
     // Cards for intents that exist; drop cards of intents that are gone.
     for (const [id, card] of cards) {
       if (!intents.some((x) => x.id === id)) { card.input?.destroy(); card.el.remove(); cards.delete(id); }
     }
-    const groups = new Map(); // topic → cards, newest first
+    const byTopic = new Map(); // topic → { card, intent }, newest first
     for (const intent of [...intents].reverse()) {
       if (!cards.has(intent.id)) cards.set(intent.id, createCard(intent));
       const card = cards.get(intent.id);
       updateCard(card, intent);
       const key = topicOf(intent);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push({ card, intent });
+      card.el.dataset.accent = String(accentOf(key));
+      if (!byTopic.has(key)) byTopic.set(key, []);
+      byTopic.get(key).push({ card, intent });
     }
     const rank = (key) => (key === '' ? -1 : topicOrder.includes(key) ? topicOrder.indexOf(key) : topicOrder.length);
-    const keys = [...groups.keys()].sort((a, b) => rank(a) - rank(b)); // the sort is stable: other topics keep their order
-    for (const [key, section] of sections) if (!groups.has(key)) { section.el.remove(); sections.delete(key); }
-    const ordered = [];
-    for (const key of keys) {
-      if (!sections.has(key)) sections.set(key, createSection(key));
-      const section = sections.get(key);
-      const members = groups.get(key);
-      const on = members.filter((m) => m.intent.active).length;
-      // A recording or a change running in a section keeps it open.
-      const working = members.some((m) => m.card.busy || m.card.recordingSeconds !== null);
-      const open = !folded.has(key) || working;
-      setText(section.name, topicName(key));
-      setText(section.count, t('intents.count', { active: on, total: members.length }));
-      section.list.hidden = !open;
-      section.toggle.setAttribute('aria-expanded', String(open));
-      section.toggle.classList.toggle('is-open', open);
-      place(section.list, members.map((m) => m.card.el));
-      ordered.push(section.el);
+    const keys = [...byTopic.keys()].sort((a, b) => rank(a) - rank(b)); // stable: other topics keep their order
+    // A group with a recording or a change running stays open; the first choice falls on a group with
+    // something new, else the first group.
+    const working = keys.find((k) => byTopic.get(k).some((m) => m.card.busy || m.card.recordingSeconds !== null));
+    if (working !== undefined) openGroup = working;
+    if (openGroup === undefined || (openGroup !== null && !byTopic.has(openGroup))) {
+      openGroup = keys.find((k) => byTopic.get(k).some((m) => ['new', 'changed'].includes(stateOf(m.intent)))) ?? keys[0] ?? undefined;
     }
-    place(topics, ordered);
+    for (const [key, g] of groups) if (!byTopic.has(key)) { g.el.remove(); groups.delete(key); }
+    const ordered = keys.map((key) => {
+      if (!groups.has(key)) groups.set(key, createGroup(key));
+      const g = groups.get(key);
+      const members = byTopic.get(key);
+      const on = members.filter((m) => m.intent.active).length;
+      const open = openGroup === key;
+      setText(g.name, topicName(key));
+      setText(g.count, t('intents.groupCount', { active: on, total: members.length }));
+      g.el.setAttribute('aria-label', t('intents.groupLabel', { name: topicName(key), active: on, total: members.length }));
+      g.el.setAttribute('aria-expanded', String(open));
+      g.el.classList.toggle('is-open', open);
+      g.mark.hidden = !members.some((m) => ['new', 'changed'].includes(stateOf(m.intent)));
+      return g.el;
+    });
+    place(groupRow, ordered);
+    const shown = openGroup !== null && openGroup !== undefined ? byTopic.get(openGroup) ?? [] : [];
+    place(cardRow, shown.map((m) => m.card.el));
+    cardRow.hidden = !shown.length;
+    cardRow.dataset.accent = String(accentOf(openGroup ?? ''));
 
-    const top = [];
-    if (transcribing) top.push(h('div.ic-pending', busy(t('canvas.transcribing'))));
-    // What the participant said appears at once, while the intents are being found in it.
-    for (const text of finding) top.push(h('div.ic-pending', busy(t('intents.finding')), h('q.ic-pending__text', text)));
-    if (inputError) top.push(errorStrip(inputError));
-    if (noneFound && !extracting && !transcribing) top.push(messageStrip('information', t('intents.noneFound')));
-    const idle = !extracting && !transcribing;
-    if (!intents.length && idle) top.push(h('p.vc-draft__empty', t(ptt ? 'intents.emptyPushToTalk' : 'intents.emptyToggle')));
-    clear(panelBody).append(...top, topics);
+    const status = [];
+    if (transcribing) status.push(h('div.ic-pending', busy(t('canvas.transcribing'))));
+    // What the participant said appears at once, while it is being brought into the intents.
+    for (const text of finding) status.push(h('div.ic-pending', busy(t('intents.finding')), h('q.ic-pending__text', text)));
+    if (inputError) status.push(errorStrip(inputError));
+    const idle = !synthesizing && !transcribing;
+    if (noneFound && idle) status.push(messageStrip('information', t('intents.noneFound')));
+    if (!intents.length && idle) status.push(h('p.vc-draft__empty', t(ptt ? 'intents.emptyPushToTalk' : 'intents.emptyToggle')));
+    else if (idle && !conv.inflight && changedSinceVersion()) status.push(h('p.ic-hint', t('intents.changedSince', { n: versionOf(conv.turns.at(-1).n) })));
+    clear(panelStatus).append(...status);
+    panelStatus.hidden = !status.length;
+    if (panelBody.firstChild !== groupRow) clear(panelBody).append(groupRow, panelStatus, cardRow);
+    groupRow.hidden = !keys.length;
     return panel;
   }
 
-  // The send button says what goes into the next version: intents not in the draft yet, and those kept.
+  // The send button says what the next version is built from: the intents that are on.
   function sendLabel() {
-    const active = activeIntents();
-    const keptN = active.filter((x) => stateOf(x) === 'applied').length;
-    const newN = active.length - keptN;
-    if (newN && keptN) return ['intents.sendNewKept', { new: newN, kept: keptN }];
-    if (newN) return [newN === 1 ? 'intents.sendOneNew' : 'intents.sendNew', { new: newN }];
-    if (keptN) return ['intents.sendKept', { kept: keptN }];
-    return ['intents.send'];
+    const n = activeIntents().length;
+    const next = versionOf((conv.turns.at(-1)?.n ?? 0) + 1);
+    if (!n) return ['intents.send'];
+    return [n === 1 ? 'intents.sendFromOne' : 'intents.sendFrom', { n, version: next }];
   }
 
   // ----- render -----
@@ -421,8 +479,9 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
 
   function renderControls() {
     const inflight = Boolean(conv.inflight);
-    const working = transcribing || extracting > 0 || cardsBusy();
-    const canRecord = !locked && !transcribing && !inflight && !starting && !startError && !anyRecordingOtherThanMain();
+    const working = transcribing || synthesizing > 0 || cardsBusy();
+    // A card that is being changed by voice would race with the next synthesis: wait for it.
+    const canRecord = !locked && !transcribing && !inflight && !starting && !startError && !anyRecordingOtherThanMain() && !cardsBusy();
     if (input) {
       if (input.recording) recButton.disabled = locked;
       else input.setEnabled(canRecord);
@@ -433,29 +492,46 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
   }
   const anyRecordingOtherThanMain = () => [...cards.values()].some((c) => c.input?.recording);
 
-  // ----- main recording: first instruction, then new intents -----
-  async function extract(text) {
-    extracting++;
+  // ----- main recording: first instruction, then into the intents -----
+  // Recordings are brought into the intents one after the other, each from the result of the one before.
+  function synthesize(text) {
+    synthesizing++;
     finding.unshift(text);
     noneFound = false;
-    const busyKey = `extract:${Math.random().toString(36).slice(2)}`;
+    const busyKey = `synthesize:${Math.random().toString(36).slice(2)}`;
     conv.setBusy(busyKey, true);
     render();
+    queue = queue.then(() => runSynthesis(text, busyKey));
+  }
+  async function runSynthesis(text, busyKey) {
     const started = performance.now();
     try {
-      const res = await api.intents.extract(round, text, aiTimeout());
       if (destroyed) return;
-      intents.push(...res.intents);
-      noneFound = res.intents.length === 0;
+      const res = await api.intents.synthesize(round, text, aiTimeout());
+      if (destroyed) return;
+      intents = res.intents;
+      const c = res.changes ?? {};
+      const touched = [...(c.added ?? []), ...(c.updated ?? [])];
+      noneFound = !touched.length && !c.removed?.length && !c.merged?.length;
+      // The group of the first change opens, and the changed cards light up for a moment.
+      const first = intents.find((x) => x.id === touched[0]);
+      if (first) openGroup = topicOf(first);
+      fresh.clear();
+      touched.forEach((id) => fresh.add(id));
+      clearTimeout(freshTimer);
+      freshTimer = setTimeout(() => { fresh.clear(); render(); }, 2500);
       remember();
-      // The transcript and the intent texts are logged by the server (server.intents.extracted).
-      logEvent('intents.extracted', { count: res.intents.length, ids: res.intents.map((x) => x.id), latencyMs: Math.round(performance.now() - started), mock: res.mock });
+      // The transcript and the intents before and after are logged by the server (server.intents.synthesized).
+      logEvent('intents.synthesized', {
+        added: c.added?.length ?? 0, updated: c.updated?.length ?? 0, merged: c.merged?.length ?? 0, removed: c.removed?.length ?? 0,
+        active: activeIntents().length, latencyMs: Math.round(performance.now() - started), mock: res.mock,
+      });
     } catch (e) {
       if (destroyed) return;
-      logEvent('intents.extractFailed', { error: e.code ?? e.name });
-      inputError = { key: errorKey(e) ?? 'intentsExtract', retry: () => { inputError = null; extract(text); } };
+      logEvent('intents.synthesizeFailed', { error: e.code ?? e.name });
+      inputError = { key: errorKey(e) ?? 'intentsSynthesize', retry: () => { inputError = null; synthesize(text); } };
     } finally {
-      extracting--;
+      synthesizing--;
       finding.splice(finding.indexOf(text), 1);
       conv.setBusy(busyKey, false);
       if (!destroyed) render();
@@ -467,7 +543,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     input = createVoiceInput(ctx, {
       round,
       button: recButton,
-      // 'instruction': builds the first instruction; 'intents': becomes new intent cards.
+      // 'instruction': builds the first instruction; 'intents': brought into the intents.
       log: () => ({ target: hasDraft() ? 'intents' : 'instruction' }),
       busy: (key, on) => conv.setBusy(key, on),
       onStart() {
@@ -486,7 +562,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
         render();
       },
       onText(text, rec) {
-        if (hasDraft()) { extract(text); return; } // marks itself busy at once
+        if (hasDraft()) { synthesize(text); return; } // marks itself busy at once
         draft.push({ text, at: new Date().toISOString(), recordingMs: rec.durationMs });
         saveDraft();
       },
@@ -511,7 +587,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     if (!active.length) return;
     noneFound = false;
     await conv.send(active.map((x) => `- ${x.text}${x.reason ? ` (why: ${x.reason})` : ''}`).join('\n'),
-      { step: 'intents', intents: active.length, intentIds: active.map((x) => x.id), inactive: intents.length - active.length, kept: active.filter((x) => stateOf(x) === 'applied').length },
+      { step: 'intents', intents: active.length, intentIds: active.map((x) => x.id), inactive: intents.length - active.length, unchanged: active.filter((x) => stateOf(x) === 'applied').length },
       { intentIds: active.map((x) => x.id) });
   }
   sendBtn.addEventListener('click', send);
@@ -555,7 +631,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     regions: { task: sidebar.el, record: recButton.parentElement, send: sendBtn, output: scroller, intents: panel, timer: timerSlot, finish: finishBtn },
     getRegion(name) {
       if (name === 'transcript') return el.querySelector('[data-region="transcript"]');
-      if (name === 'intentCard') return topics.querySelector('.ic-card');
+      if (name === 'intentCard') return cardRow.querySelector('.ic-card');
       return this.regions[name];
     },
     isBusy: () => conv.isBusy(),
@@ -570,6 +646,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     },
     destroy() {
       destroyed = true;
+      clearTimeout(freshTimer);
       input?.destroy();
       for (const c of cards.values()) c.input?.destroy();
       response.destroy();

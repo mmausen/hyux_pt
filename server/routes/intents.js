@@ -1,19 +1,26 @@
 // /api/intents: intent cards of the 'intents' interaction mode. The server owns them, next to the turns:
-// session.rounds[round].intents = [{ id, text, reason, quote, active, transcript, createdAt, updatedAt,
-// createdAfterTurn, annotations: [{ text, before, after, reasonBefore, reasonAfter, at }], sentIn: [turn n] }].
-// text is the change request, reason why the participant wants it ('' if they gave none) and quote the
-// participant's own words it comes from (part of transcript, the whole recording).
+// session.rounds[round].intents = [{ id, topic, text, reason, quotes, active, transcript, createdAt, updatedAt,
+// createdAfterTurn, annotations: [{ text, before, after, reasonBefore, reasonAfter, at }],
+// changes: [{ at, cause, before, after }], sentIn: [turn n] }].
+// Intents are the building blocks of the text. text says what the text should do, reason why the
+// participant wants it ('' if they gave none), quotes the participant's own words it comes from, topic the
+// part of the text it shapes (a key of config.ai.intents.topics, or a name the participant gave).
+// Intents that were merged into another one, taken back by voice or deleted move to
+// session.rounds[round].removedIntents (with mergedInto / removedBy and removedAt), so the log keeps them.
 //
-//   POST /api/intents/start         { round }         the round starts from the task's starting draft
-//   POST /api/intents/extract       { round, text }   spoken comment → new intents (may be none)
-//   POST /api/intents/:id/annotate  { round, text }   spoken annotation → the intent, rewritten
-//   PUT  /api/intents/:id           { round, active } switch an intent on or off
+//   POST   /api/intents/start          { round }         the round starts from the task's starting draft
+//   POST   /api/intents/synthesize     { round, text }   spoken comment + current intents + task → updated set
+//   POST   /api/intents/:id/annotate   { round, text }   spoken annotation → the intent, rewritten
+//   PUT    /api/intents/:id            { round, active } switch an intent on or off
+//   DELETE /api/intents/:id            { round }         delete an intent
 //
 // The starting draft (`scaffold` in data/tasks.json; for the practice round tutorial.practice.intents.task
 // in the strings file) is a generic outline of the task without any choices made. It is stored as turn 1
-// with kind 'scaffold' and becomes the first "current draft"; no LLM call is involved.
-// The LLM sees the prompt from config.ai.intents, the latest draft (to resolve "that part") and the
-// spoken text. Never the task or the situation (only what the starting draft says). Sending the active intents to the AI is /api/chat with intentIds.
+// with kind 'scaffold'; no LLM call is involved.
+// Synthesis: the LLM gets config.ai.intents.synthesizePrompt, the task and situation, the topics, the
+// latest draft (to resolve "that part"), the active intents and the comment, and returns the whole updated
+// set of active intents. Intents that are off stay as they are. Writing the text from the active intents is
+// /api/chat with intentIds.
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Router } from 'express';
@@ -22,24 +29,31 @@ import { requireSession, useMock } from '../middleware/session.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 
 const MAX_CHARS = 4000;
-const MAX_INTENTS = 60;
 const NO_REASON = '(none given)'; // what the annotate call sees for an intent without a reason
 const clean = (v) => String(v ?? '').trim();
 
-const EXTRACT_SCHEMA = {
+const SYNTHESIZE_SCHEMA = {
   type: 'object',
   properties: {
     intents: {
       type: 'array',
       items: {
         type: 'object',
-        properties: { text: { type: 'string' }, reason: { type: 'string' }, quote: { type: 'string' } },
-        required: ['text', 'reason', 'quote'],
+        properties: {
+          id: { type: 'string' },
+          mergedFrom: { type: 'array', items: { type: 'string' } },
+          topic: { type: 'string' },
+          text: { type: 'string' },
+          reason: { type: 'string' },
+          quote: { type: 'string' },
+        },
+        required: ['id', 'mergedFrom', 'topic', 'text', 'reason', 'quote'],
         additionalProperties: false,
       },
     },
+    removed: { type: 'array', items: { type: 'string' } },
   },
-  required: ['intents'],
+  required: ['intents', 'removed'],
   additionalProperties: false,
 };
 const ANNOTATE_SCHEMA = {
@@ -51,15 +65,100 @@ const ANNOTATE_SCHEMA = {
 
 // The draft the participant is working on: the latest finished response of the round.
 export const latestDraft = (roundData) => [...(roundData?.turns ?? [])].reverse().find((t) => t.status === 'done')?.response ?? '';
+// The draft every version is written from: the starting draft, or (a task without one) the first response.
+export const baseDraft = (roundData) => (roundData?.turns ?? []).find((t) => t.status === 'done')?.response ?? '';
+// Quotes of an intent; intents stored before the synthesis have a single quote.
+export const quotesOf = (x) => (Array.isArray(x.quotes) ? x.quotes : x.quote ? [x.quote] : []);
+
+// The topic as stored: a configured key (matched without regard to case, also by its label) or the
+// participant's own name for it, shortened.
+export function topicKey(config, raw) {
+  const v = clean(raw);
+  const found = config.ai.intents.topics.find((x) => x.key.toLowerCase() === v.toLowerCase() || x.label.toLowerCase() === v.toLowerCase());
+  if (found) return found.key;
+  return v.split(/\s+/).slice(0, 3).join(' ').slice(0, 40);
+}
+
+// Brings the model's answer into the stored intents. sentIds: the intents the model saw (active at the
+// start). Returns what changed, by id. An intent the model leaves out without merging or removing it stays
+// as it is, so nothing the participant said is lost by an omission.
+export function reconcile({ config, roundData, data, sentIds, transcript, now }) {
+  const live = roundData.intents;
+  const byId = new Map(live.map((x) => [x.id, x]));
+  const claimed = new Set();
+  const changes = { added: [], updated: [], merged: [], removed: [] };
+  const doneTurns = roundData.turns.filter((t) => t.status === 'done').length;
+  let next = [...live, ...(roundData.removedIntents ?? [])].reduce((m, x) => Math.max(m, Number(String(x.id).slice(1)) || 0), 0);
+  const archive = (x, extra) => {
+    roundData.removedIntents = [...(roundData.removedIntents ?? []), { ...x, ...extra, removedAt: now }];
+    roundData.intents = roundData.intents.filter((y) => y !== x);
+  };
+  const free = (id) => sentIds.has(id) && !claimed.has(id) && byId.has(id);
+  const items = (data?.intents ?? []).map((x) => ({
+    id: clean(x?.id), mergedFrom: Array.isArray(x?.mergedFrom) ? x.mergedFrom.map(clean) : [],
+    topic: topicKey(config, x?.topic), text: clean(x?.text), reason: clean(x?.reason), quote: clean(x?.quote),
+  })).filter((x) => x.text).slice(0, config.ai.intents.maxIntents + 4);
+
+  for (const item of items) {
+    // An intent the participant switched off is not shown to the model; an answer that names it anyway
+    // leaves it as it is.
+    if (item.id && byId.has(item.id) && !sentIds.has(item.id)) continue;
+    let target = free(item.id) ? byId.get(item.id) : null;
+    const absorbed = item.mergedFrom.filter((id) => id !== target?.id && free(id));
+    if (!target && absorbed.length) target = byId.get(absorbed.shift());
+    if (target) {
+      claimed.add(target.id);
+      const before = { topic: target.topic ?? '', text: target.text, reason: target.reason ?? '' };
+      const after = { topic: item.topic || before.topic, text: item.text, reason: item.reason };
+      target.quotes = quotesOf(target);
+      delete target.quote;
+      if (item.quote && !target.quotes.includes(item.quote)) target.quotes.push(item.quote);
+      for (const id of absorbed) {
+        claimed.add(id);
+        const x = byId.get(id);
+        for (const q of quotesOf(x)) if (!target.quotes.includes(q)) target.quotes.push(q);
+        archive(x, { mergedInto: target.id });
+        changes.merged.push({ id, into: target.id });
+      }
+      if (absorbed.length || after.topic !== before.topic || after.text !== before.text || after.reason !== before.reason) {
+        Object.assign(target, after, { updatedAt: now });
+        target.changes = [...(target.changes ?? []), { at: now, cause: absorbed.length ? 'merge' : 'comment', before, after, transcript }];
+        changes.updated.push(target.id);
+      }
+    } else {
+      const x = {
+        id: `i${++next}`, topic: item.topic, text: item.text, reason: item.reason, quotes: [item.quote || transcript], active: true,
+        transcript, createdAt: now, updatedAt: now, createdAfterTurn: doneTurns, annotations: [], changes: [], sentIn: [],
+      };
+      roundData.intents.push(x);
+      changes.added.push(x.id);
+    }
+  }
+  for (const id of (data?.removed ?? []).map(clean)) {
+    if (!free(id)) continue;
+    claimed.add(id);
+    archive(byId.get(id), { removedBy: 'comment', transcript });
+    changes.removed.push(id);
+  }
+  return changes;
+}
 
 export function intentRoutes(app) {
   const { config, env, store, logger, ai, mock, tasksById } = app;
   const r = Router();
-  // The practice round's starting draft lives in the strings file next to the practice task.
-  let practiceScaffold = '';
+  // The practice round's task and starting draft live in the strings file.
+  let practiceTask = null;
   import(pathToFileURL(path.join(ROOT, 'content', `strings.${config.study.locale}.js`)).href)
-    .then((m) => { practiceScaffold = m.default?.tutorial?.practice?.intents?.task?.scaffold ?? ''; })
+    .then((m) => { practiceTask = m.default?.tutorial?.practice?.intents?.task ?? null; })
     .catch(() => {});
+  const taskOf = (round, roundData) => (round === 0 ? practiceTask : tasksById.get(roundData.taskId)) ?? {};
+  // One synthesis at a time per round: each one starts from the result of the one before.
+  const queues = new Map();
+  const serial = (key, fn) => {
+    const run = (queues.get(key) ?? Promise.resolve()).then(fn, fn);
+    queues.set(key, run.catch(() => {}));
+    return run;
+  };
   const limit = rateLimit({
     name: 'chat',
     windowMs: config.limits.rateLimit.windowSeconds * 1000,
@@ -97,7 +196,7 @@ export function intentRoutes(app) {
     const { round, key, roundData } = p;
     const first = roundData.turns[0];
     if (first) return res.json({ turn: first.kind === 'scaffold' ? first : null });
-    const scaffold = (round === 0 ? practiceScaffold : tasksById.get(roundData.taskId)?.scaffold ?? '').trim();
+    const scaffold = String(taskOf(round, roundData).scaffold ?? '').trim();
     if (!scaffold) return res.json({ turn: null });
     const now = new Date().toISOString();
     const turn = { n: 1, kind: 'scaffold', transcript: '', response: scaffold, status: 'done', sentAt: now, respondedAt: now };
@@ -107,42 +206,49 @@ export function intentRoutes(app) {
     res.json({ turn });
   });
 
-  r.post('/extract', requireSession(store), limit, async (req, res) => {
+  r.post('/synthesize', requireSession(store), limit, async (req, res) => {
     const p = parse(req, res);
     if (!p) return;
     const { round, key, roundData, text } = p;
-    if (roundData.intents.length >= MAX_INTENTS) return res.status(409).json({ error: 'too_many_intents' });
     const service = useMock(req, env, 'llm') ? mock : ai;
     const log = logger.forSession(req.study, round);
-    const started = Date.now();
-    try {
-      const out = await service.structured({
-        kind: 'extractIntents',
-        instructions: config.ai.intents.extractPrompt,
-        input: [{ role: 'user', content: `Current draft:\n${latestDraft(roundData)}\n\nComment:\n${text}` }],
-        schema: EXTRACT_SCHEMA,
-        signal: AbortSignal.timeout(config.ai.timeoutSeconds * 1000),
-      });
-      const now = new Date().toISOString();
-      const doneTurns = roundData.turns.filter((t) => t.status === 'done').length;
-      let next = roundData.intents.reduce((m, x) => Math.max(m, Number(x.id.slice(1)) || 0), 0);
-      const added = (out.data?.intents ?? [])
-        .map((x) => ({ text: clean(x?.text), reason: clean(x?.reason), quote: clean(x?.quote) }))
-        .filter((x) => x.text).slice(0, 8)
-        .map((x) => ({
-          id: `i${++next}`, text: x.text, reason: x.reason, quote: x.quote || text, active: true, transcript: text,
-          createdAt: now, updatedAt: now, createdAfterTurn: doneTurns, annotations: [], sentIn: [],
-        }));
-      roundData.intents.push(...added);
-      await store.update(req.study, (s) => { s.rounds[key] = roundData; });
-      log.write('server.intents.extracted', {
-        latencyMs: Date.now() - started, transcript: text, intents: added.map(({ id, text: t, reason, quote }) => ({ id, text: t, reason, quote })),
-        usage: out.usage ?? null, attempts: out.attempts, attempt: out.attempt, mock: service === mock || undefined,
-      });
-      res.json({ intents: added, mock: service === mock || undefined });
-    } catch (e) {
-      fail(log, res, '/api/intents/extract', e);
-    }
+    await serial(`${req.study.id}:${key}`, async () => {
+      const started = Date.now();
+      const task = taskOf(round, roundData);
+      const { topics, maxPerTopic, maxIntents } = config.ai.intents;
+      const sent = roundData.intents.filter((x) => x.active);
+      const sentIds = new Set(sent.map((x) => x.id));
+      const current = sent.map((x) => ({ id: x.id, topic: x.topic ?? '', text: x.text, reason: x.reason ?? '' }));
+      const content = [
+        `Task:\n${[task.title, task.task].filter(Boolean).join('\n')}`,
+        `Situation:\n${task.situation ?? ''}`,
+        `Topics:\n${topics.map((x) => `- ${x.key}: ${x.label} (${x.about})`).join('\n')}`,
+        `Current draft:\n${latestDraft(roundData)}`,
+        `Current intents:\n${JSON.stringify(current)}`,
+        `New comment:\n${text}`,
+      ].join('\n\n');
+      try {
+        const out = await service.structured({
+          kind: 'synthesizeIntents',
+          instructions: config.ai.intents.synthesizePrompt.replaceAll('{maxPerTopic}', String(maxPerTopic)).replaceAll('{maxIntents}', String(maxIntents)),
+          input: [{ role: 'user', content }],
+          schema: SYNTHESIZE_SCHEMA,
+          maxOutputTokens: config.ai.intents.synthesizeMaxOutputTokens,
+          signal: AbortSignal.timeout(config.ai.timeoutSeconds * 1000),
+        });
+        const now = new Date().toISOString();
+        const changes = reconcile({ config, roundData, data: out.data, sentIds, transcript: text, now });
+        await store.update(req.study, (s) => { s.rounds[key] = roundData; });
+        log.write('server.intents.synthesized', {
+          latencyMs: Date.now() - started, transcript: text, changes,
+          before: current, after: roundData.intents.filter((x) => x.active).map(({ id, topic, text: t, reason }) => ({ id, topic, text: t, reason })),
+          usage: out.usage ?? null, attempts: out.attempts, attempt: out.attempt, mock: service === mock || undefined,
+        });
+        res.json({ intents: roundData.intents, changes, mock: service === mock || undefined });
+      } catch (e) {
+        fail(log, res, '/api/intents/synthesize', e);
+      }
+    });
   });
 
   r.post('/:id/annotate', requireSession(store), limit, async (req, res) => {
@@ -190,6 +296,20 @@ export function intentRoutes(app) {
     intent.active = req.body.active;
     await store.update(req.study, (s) => { s.rounds[key] = roundData; });
     res.json({ intent });
+  });
+
+  r.delete('/:id', requireSession(store), async (req, res) => {
+    const p = parse(req, res, { needText: false });
+    if (!p) return;
+    const { round, key, roundData } = p;
+    const intent = roundData.intents.find((x) => x.id === req.params.id);
+    if (!intent) return res.status(404).json({ error: 'no_intent' });
+    const now = new Date().toISOString();
+    roundData.removedIntents = [...(roundData.removedIntents ?? []), { ...intent, removedBy: 'participant', removedAt: now }];
+    roundData.intents = roundData.intents.filter((x) => x !== intent);
+    await store.update(req.study, (s) => { s.rounds[key] = roundData; });
+    logger.forSession(req.study, round).write('server.intent.deleted', { id: intent.id, topic: intent.topic ?? '', text: intent.text, reason: intent.reason ?? '', active: intent.active });
+    res.json({ ok: true });
   });
 
   return r;

@@ -80,19 +80,46 @@ export default {
     sendHistory: true, // include earlier turns of the current task
     timeoutSeconds: 60, // also used for the AI check in the system check
     // Prompts of the 'intents' mode. The base systemPrompt above is used for writing the draft; these
-    // are separate calls. The model never sees the task here either.
+    // are separate calls. Intents are the building blocks of the text: each recording is brought together
+    // with the current intents (and the task) into an updated, small set, sorted into topics; a send
+    // writes the text anew from the starting draft and the active intents. The task reaches only the
+    // synthesis call, never the call that writes the text.
     intents: {
-      extractPrompt:
-        'You turn a spoken comment about a draft into intents: short, self-contained change requests for ' +
-        'the draft, each with the reason the speaker gave for it. The comment was transcribed ' +
-        'automatically and may contain recognition errors. Split the comment into one intent per distinct ' +
-        'request; most comments contain one or two. For each intent return: text, the request as an ' +
-        'imperative in at most 12 words, in the language of the comment (for example "Mention the six-week ' +
-        'rollout"), resolving references such as "that part" using the draft; reason, why the speaker ' +
-        'wants it, in at most 15 words and in their terms (for example "The CFO cares about the cost of ' +
-        'turnover"), taken only from what they said or clearly meant, never a reason of your own, and an ' +
-        'empty string if they gave none; quote, the words of the comment the intent comes from, copied ' +
-        'exactly. Leave out filler. If the comment contains no request, return no intents.',
+      // Topics the intents are sorted into, in this order. key: stored with the intent (the UI label is
+      // intents.topicLabels.<key> in the strings file); label and about: what the model reads. The model
+      // may add a topic of its own only when the participant clearly names another aspect.
+      topics: [
+        { key: 'structure', label: 'Structure', about: 'order, length, sections, opening and closing' },
+        { key: 'tone', label: 'Tone', about: 'voice, formality, warmth, confidence and wording' },
+        { key: 'mainArguments', label: 'Main arguments', about: 'the central points and claims the text makes' },
+        { key: 'secondaryArguments', label: 'Secondary arguments', about: 'supporting points, examples and evidence' },
+        { key: 'details', label: 'Details', about: 'facts, figures, names, dates and the call to action' },
+      ],
+      maxPerTopic: 3, // "a few main points": the synthesis merges intents to stay within these
+      maxIntents: 12,
+      synthesizePrompt:
+        'You keep the author\'s intents for a text they write with an assistant. Intents are the building ' +
+        'blocks of the text: each one says what the text should do or contain, in the author\'s terms, with ' +
+        'the author\'s reason. You receive the task the author works on, the topics intents are sorted into, ' +
+        'the current draft, the current intents (JSON, each with an id) and a new spoken comment by the ' +
+        'author. The comment was transcribed automatically and may contain recognition errors. Return the ' +
+        'complete updated set of intents. Bring the comment together with the current intents: a request ' +
+        'that refines, extends or corrects a current intent updates it and keeps its id; intents that ' +
+        'overlap are merged into one, which keeps the id of one of them and lists the ids of the others in ' +
+        'mergedFrom; a new request becomes a new intent with an empty id; intents the comment does not ' +
+        'touch are returned unchanged with their id. If the author takes a request back, update the intent, ' +
+        'or list its id in removed when nothing of it is left. Keep the set small: at most {maxPerTopic} ' +
+        'intents per topic and {maxIntents} in all, so prefer one broader intent to several narrow ones on ' +
+        'the same point. Sort each intent into the topic it shapes in the text, using a topic key; use a ' +
+        'name of your own in at most three words only when the author clearly names another aspect. text: ' +
+        'what the text should do, as an imperative in at most 15 words, in the language of the comment, ' +
+        'with references such as "that part" resolved from the draft. reason: why the author wants it, in ' +
+        'at most 15 words, only from what the author said or clearly meant and never a reason of your own; ' +
+        'merged intents keep their reasons; an empty string if there is none. quote: the words of the new ' +
+        'comment this intent comes from, copied exactly; an empty string for intents the comment does not ' +
+        'touch. Use the task only to understand, word and sort what the author asks for, never to add a ' +
+        'request the author did not make. If the comment contains no request, return the current intents ' +
+        'unchanged.',
       annotatePrompt:
         'You update one intent (a short change request for a draft, with the reason the author gave for ' +
         'it) according to a spoken annotation. The annotation was transcribed automatically and may ' +
@@ -101,14 +128,16 @@ export default {
         'detail, merged. Return reason in at most 15 words: the current reason, updated or extended if the ' +
         'annotation gives a new or further reason; never a reason of your own, and an empty string if ' +
         'there is none.',
-      reviseInstruction:
-        'Revise the current draft below so that it follows every intent in the list. Some intents give ' +
-        'the author\'s reason in brackets: use it to decide how to carry the intent out and what to ' +
-        'emphasise, since it shows what the author has in mind. Keep everything the intents do not ask to ' +
-        'change. The draft may contain placeholders in square brackets: fill one only when the intents ' +
-        'give what it needs, otherwise keep it as it is. Answer with the full revised draft only, starting ' +
+      composeInstruction:
+        'Write the text from the starting draft below so that it follows every building block in the ' +
+        'list. The building blocks are sorted by topic, and together they are everything the author wants ' +
+        'from the text. Some give the author\'s reason in brackets: use it to decide how to carry the block ' +
+        'out and what to emphasise. Where the building blocks say nothing, keep the starting draft as it ' +
+        'is. The starting draft may contain placeholders in square brackets: fill one only when the ' +
+        'building blocks give what it needs, otherwise keep it. Answer with the full text only, starting ' +
         'with its first line: do not introduce it, describe what you changed or add notes.',
-      maxOutputTokens: 600, // for extracting and annotating intents
+      maxOutputTokens: 600, // for annotating an intent
+      synthesizeMaxOutputTokens: 2000, // for the synthesis, which returns the whole set
       // A second, identical intent request starts if the first has not answered after this many seconds;
       // the first answer is used. Cuts the rare very slow request (seen: 21 s instead of 2–3 s). 0 = off.
       hedgeAfterSeconds: 5,

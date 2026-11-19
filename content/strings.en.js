@@ -163,7 +163,8 @@ export default {
       empty: 'No speech was recognized in the last recording. Try again.',
       chat: 'The assistant could not respond. Your instruction is kept. Try again.',
       scaffold: 'The starting draft could not be loaded. Try again.',
-      intentsExtract: 'Your recording could not be turned into intents. Try again.',
+      intentsSynthesize: 'Your recording could not be brought into the intents. Try again.',
+      intentDelete: 'The intent could not be deleted. Try again.',
       intentAnnotate: 'The intent could not be changed. Try again.',
       intentToggle: 'The intent could not be switched. Try again.',
       timeout: 'The request took too long. Your instruction is kept. Try again.',
@@ -192,19 +193,23 @@ export default {
   // Intents mode (public/js/modes/intents): the intent cards next to the draft.
   intents: {
     panelLabel: 'Intents',
-    count: '{active} of {total} on',
+    groupsLabel: 'Intent groups',
+    groupCount: '{active}/{total}', // intents on / all intents of a group
+    groupLabel: '{name}: {active} of {total} on',
     emptyPushToTalk: 'Hold the record button or the Space key and say what to change. What you say becomes intents here.',
     emptyToggle: 'Select the record button and say what to change. What you say becomes intents here.',
-    finding: 'Finding intents in your recording',
-    noneFound: 'No change request was found in your last recording. Try again in other words.',
+    finding: 'Bringing your words into the intents',
+    noneFound: 'Your last recording did not change the intents. Try again in other words.',
+    changedSince: 'Your intents changed since Version {n}. Send to build the draft from them.',
     updating: 'Updating the intent',
-    on: 'On',
-    off: 'Off',
     useLabel: 'Use intent: {text}',
     why: 'Why',
     yourWords: 'Your words',
-    // Topic sections. The keys are the values of an intent's topic, in this order; any other topic is shown
-    // under its own name after these. Intents without a topic wait in the first section.
+    delete: 'Delete',
+    deleteLabel: 'Delete intent: {text}',
+    // Groups. The keys are the values of an intent's topic, in this order (the model reads the matching
+    // config.ai.intents.topics); any other topic is shown under its own name after these. Intents without
+    // a topic come first.
     topicLabels: {
       structure: 'Structure',
       tone: 'Tone',
@@ -219,12 +224,13 @@ export default {
     tagNew: 'New',
     tagChanged: 'Changed',
     tagSent: 'In Version {n}',
-    send: 'Send Intents',
-    // The send button counts what goes into the next version: new or changed intents, and those kept.
-    sendNewKept: 'Send {new} New + {kept} Kept',
-    sendOneNew: 'Send 1 New Intent',
-    sendNew: 'Send {new} New Intents',
-    sendKept: 'Send {kept} Kept',
+    // The send button says what the next version is built from.
+    send: 'Write Version',
+    sendFrom: 'Write Version {version} from {n} Intents',
+    sendFromOne: 'Write Version {version} from 1 Intent',
+    // Next to the assistant's name: which intents a version was built from.
+    versionFrom: 'Version {n}, built from {count} intents',
+    versionFromOne: 'Version {n}, built from 1 intent',
   },
   tutorial: {
     progress: '{step} of {total}',
@@ -247,10 +253,10 @@ export default {
       recordPushToTalk: { title: 'Speak Your Thoughts', text: 'Hold this button, or the Space key, while you say what you want to change in the draft and why. What you say becomes intents: short change requests for the draft, with your reasons. The button sits on the line between the draft and your intents.' },
       recordToggle: { title: 'Speak Your Thoughts', text: 'Select this button to start recording, say what you want to change in the draft and why, and select it again when you are done. What you say becomes intents: short change requests for the draft, with your reasons. The button sits on the line between the draft and your intents.' },
       output: { title: 'Read the Draft', text: 'Each task starts with a generic starting draft: a plain outline for you to shape. The assistant’s latest version appears in the upper half; each new version replaces the previous one, and the time next to it shows when it was last updated.' },
-      intents: { title: 'Your Intents', text: 'Each thing you ask for appears in the lower half as a card with your reason under “Why”. One recording can give several intents. The cards are sorted by topic, and you can fold each topic away. “New” marks intents that have not been sent yet.' },
-      cardPushToTalk: { title: 'Use or Change an Intent', text: 'Clear the box to leave an intent out of the next version. Select “Your words” to see what you said. To change an intent, hold its microphone button and say what to change; it is updated when you release the button.' },
-      cardToggle: { title: 'Use or Change an Intent', text: 'Clear the box to leave an intent out of the next version. Select “Your words” to see what you said. To change an intent, select its microphone button, say what to change and select it again; it is updated then.' },
-      send: { title: 'Send the Intents', text: 'Sends the intents that are ticked, with your reasons and the latest draft, to the assistant. It writes a new version from them; earlier versions are not sent. The button shows how many intents are new and how many are kept from the draft.' },
+      intents: { title: 'Your Intents', text: 'Your intents are the building blocks of the text. Each recording is brought together with the intents you already have: it can add an intent, change one or merge two. The intents are sorted into groups; select a group to see its cards. “New” and “Changed” mark what is not in the draft yet.' },
+      cardPushToTalk: { title: 'Use or Change an Intent', text: 'Clear the box to leave an intent out of the next version, or delete it with the cross. Select “Your words” to see what you said. To change an intent, hold its microphone button and say what to change; it is updated when you release the button.' },
+      cardToggle: { title: 'Use or Change an Intent', text: 'Clear the box to leave an intent out of the next version, or delete it with the cross. Select “Your words” to see what you said. To change an intent, select its microphone button, say what to change and select it again; it is updated then.' },
+      send: { title: 'Write a Version', text: 'The assistant writes the text anew from the starting draft and the intents that are ticked, with your reasons. Earlier versions are not used, so every version is built from exactly the intents you see switched on.' },
       timer: { title: 'Keep an Eye on the Time', text: 'This bar fills up as time passes. Time keeps running while the assistant writes.' },
       finish: { title: 'Finish the Task', text: 'Select Finish Task when you are happy with the result. You can finish at any time, also before the time limit.' },
     },

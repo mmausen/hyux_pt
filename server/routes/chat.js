@@ -1,13 +1,15 @@
 // /api/chat: sends one instruction to the LLM. The model sees only the system prompt (config.ai.systemPrompt),
 // earlier turns of the same round (if config.ai.sendHistory) and the new transcript. Never the task.
-// Intents mode: { round, intentIds } instead of text. The model then gets no history, only the latest
-// draft and the listed intents (config.ai.intents.reviseInstruction); the turn records which intents.
+// Intents mode: { round, intentIds } instead of text. The model then gets no history and no earlier
+// version: it writes the text anew from the starting draft and the listed intents, sorted by topic
+// (config.ai.intents.composeInstruction). The turn records which intents, so every version can be traced
+// to its building blocks.
 // The server owns the conversation: turns are stored in session.rounds[round].turns.
 // Response: NDJSON stream of {type:'delta', text} … then {type:'done', turn} or {type:'error', error}.
 import { Router } from 'express';
 import { requireSession, useMock } from '../middleware/session.js';
 import { rateLimit } from '../middleware/rateLimit.js';
-import { latestDraft } from './intents.js';
+import { baseDraft } from './intents.js';
 import { cleanResponse } from '../../public/js/core/cleanResponse.js';
 
 const MAX_CHARS = 4000;
@@ -41,14 +43,23 @@ export function chatRoutes(app) {
     let input;
     let intents = null;
     if (intentIds) {
-      // Intents: the latest draft and the chosen intents, nothing else.
-      const draft = latestDraft(roundData);
+      // Intents: the starting draft and the chosen intents, nothing else.
+      const draft = baseDraft(roundData);
       intents = (roundData.intents ?? []).filter((x) => intentIds.includes(x.id));
       if (!draft || !intents.length) return res.status(400).json({ error: 'no_intents' });
-      // Each intent with the participant's reason, when they gave one.
-      text = intents.map((x) => `- ${x.text}${x.reason ? ` (why: ${x.reason})` : ''}`).join('\n');
+      // Sorted by topic in the configured order (other topics after them); each intent with the
+      // participant's reason, when they gave one.
+      const { topics } = config.ai.intents;
+      const rank = (k) => { const i = topics.findIndex((x) => x.key === k); return i < 0 ? topics.length : i; };
+      const groups = new Map();
+      for (const x of [...intents].sort((a, b) => rank(a.topic ?? '') - rank(b.topic ?? ''))) {
+        const label = topics.find((t) => t.key === x.topic)?.label ?? (x.topic || 'Other');
+        if (!groups.has(label)) groups.set(label, []);
+        groups.get(label).push(`- ${x.text}${x.reason ? ` (why: ${x.reason})` : ''}`);
+      }
+      text = [...groups].map(([label, lines]) => `${label}:\n${lines.join('\n')}`).join('\n\n');
       history = [];
-      input = `${config.ai.intents.reviseInstruction}\n\nIntents:\n${text}\n\nCurrent draft:\n${draft}`;
+      input = `${config.ai.intents.composeInstruction}\n\nBuilding blocks:\n${text}\n\nStarting draft:\n${draft}`;
     } else {
       history = config.ai.sendHistory
         // A starting draft (intents mode) has no instruction; the voice mode leaves it out.
@@ -60,7 +71,7 @@ export function chatRoutes(app) {
       input = text;
     }
     const turn = { n: roundData.turns.length + 1, transcript: text, response: '', status: 'pending', sentAt: new Date().toISOString() };
-    if (intents) turn.intents = intents.map(({ id, text: t, reason }) => ({ id, text: t, reason: reason ?? '' }));
+    if (intents) turn.intents = intents.map(({ id, topic, text: t, reason, updatedAt }) => ({ id, topic: topic ?? '', text: t, reason: reason ?? '', updatedAt }));
     roundData.turns.push(turn);
     await store.update(session, (s) => { s.rounds[key] = roundData; });
 
