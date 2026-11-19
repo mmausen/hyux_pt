@@ -57,6 +57,9 @@ export default {
     //               one, the first instruction is sent as spoken). Each recording is split into intent
     //               cards that can be switched off or changed by voice; a send hands the AI only the
     //               active intents and the latest draft.
+    //   'customer': the task starts from its starting draft; the AI plays the reader (a persona of the task)
+    //               and reacts to passages of the draft; the participant responds by voice and sends the
+    //               changes, which gives the next version.
     mode: 'intents',
     recordingMode: 'pushToTalk', // 'pushToTalk' (hold button or Space) | 'toggle' (click to start, click to stop)
     maxRecordingSeconds: 60,
@@ -270,6 +273,44 @@ export default {
         'fields that do not apply. Write the labels in the language of the comment.',
       includeSituation: true, // the model sees the task's situation (facts); it never sees the task itself
       maxSliders: 5,
+    },
+    // Prompts of the 'customer' mode. The AI plays the reader of the draft (a persona of the task, see
+    // `personas` in data/tasks.json) and only reacts; the participant decides what to change. The persona
+    // is the one thing about the task the model sees here.
+    customer: {
+      reactPrompt:
+        'You play the reader of a draft that was written to you. Who you are is described below. Read the ' +
+        'draft as this person would and react to it the way they would while reading: in the first person, ' +
+        'honestly and briefly, in your own voice (for example "This feels pushy." or "You lost me at the ' +
+        'pricing part."). Give 2 to 5 reactions to the passages that matter most to you, what works for you ' +
+        'as well as what does not. Only say how the text lands with you: what you feel, doubt, miss, wonder ' +
+        'about or like. Never suggest wording, changes or solutions, never say what the writer should do, ' +
+        'add or write, and never rewrite anything. Do not react to placeholders in square brackets. For ' +
+        'each reaction return: quote, the passage it is about, copied exactly from the draft, character for ' +
+        'character, from a few words up to one sentence; text, your reaction in at most 15 words; tone, ' +
+        '"positive", "neutral" or "negative". Order the reactions as their passages appear in the draft.',
+      reviseInstruction:
+        'Revise the current draft below. Its reader read it and reacted to passages of it (quoted). The ' +
+        'author has responded to some reactions and may have given general instructions. The author ' +
+        'decides: carry out the author\'s responses and general instructions. Where a reaction has no ' +
+        'response, change the passage so that this reaction would no longer arise; a positive reaction with ' +
+        'no response marks something that works, so keep it. Keep everything that nothing here asks to ' +
+        'change. The draft may contain placeholders in square brackets: fill one only when the author gives ' +
+        'what it needs, otherwise keep it as it is. Answer with the full revised draft only, starting with ' +
+        'its first line: do not introduce it, describe what you changed or add notes.',
+      // Used for a task without personas: one generic busy decision-maker.
+      defaultPersona: {
+        id: 'decision-maker',
+        name: 'Decision-Maker',
+        role: 'Busy decision-maker',
+        about: 'Senior, short on time, reads many vendor letters a week.',
+        profile:
+          'You are a senior decision-maker at the customer. You get many letters from vendors every week and ' +
+          'give each one a minute. You want to know quickly what is in it for your organisation, what it ' +
+          'costs and what you are asked to do. Vague claims, filler and sales talk lose you.',
+      },
+      maxReactions: 5,
+      maxOutputTokens: 800,
     },
   },
 

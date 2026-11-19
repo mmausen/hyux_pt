@@ -37,7 +37,7 @@ import { renderComponent, componentTitle } from './components.js';
 const timeOf = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '');
 const errorKey = (e) => (e?.code === 'rate_limited' ? 'rateLimited' : e?.code === 'llm_timeout' || e?.name === 'TimeoutError' ? 'timeout' : null);
 
-export function createCanvas(ctx, { round, task, live = true, conceal = false, sample = null, showFinish = true, onTurn = null }) {
+export function createCanvas(ctx, { round, task, live = true, conceal = false, sample = null, showFinish = true, onTurn = null, onRecorded = null }) {
   const { config, session } = ctx;
   const ptt = config.interaction.recordingMode === 'pushToTalk';
   const aiTimeout = () => AbortSignal.timeout((config.ai.timeoutSeconds + 5) * 1000);
@@ -717,6 +717,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
         render();
       },
       onText(text, rec) {
+        onRecorded?.();
         if (hasDraft()) { collect(text); return; } // marks itself busy at once
         draft.push({ text, at: new Date().toISOString(), recordingMs: rec.durationMs });
         saveDraft();

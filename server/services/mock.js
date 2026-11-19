@@ -24,11 +24,33 @@ const CHALLENGES = [
   'What if the opposite were true: what would you write if a smaller renewal served the customer better?',
   'Which number would make this point harder to argue with, and do you actually have it?',
 ];
+// Customer reactions: canned texts by tone, picked for sentences of the actual draft (see structured()).
+const REACTIONS = {
+  money: [
+    ['negative', 'I still can’t tell what this costs us, or what we get for it.'],
+    ['negative', 'A number, but what does it mean for our budget?'],
+  ],
+  opening: [
+    ['neutral', 'Polite, but every vendor opens like this.'],
+    ['negative', 'This tells me nothing I didn’t already know.'],
+  ],
+  ask: [
+    ['negative', 'This feels pushy. You want my time before you’ve earned it.'],
+    ['neutral', 'So what exactly do you expect from me now?'],
+  ],
+  other: [
+    ['positive', 'Clear. I understand what you mean here.'],
+    ['neutral', 'I read this twice and I’m still not sure why it matters to us.'],
+    ['positive', 'Good, this is the part that speaks to me.'],
+    ['negative', 'This sounds like sales talk.'],
+  ],
+};
 
 export function createMockService({ config }) {
   let c = 0;
   let t = 0;
   let r = 0;
+  let asks = 0;
   const latency = () => config.dev.mockLatencyMs;
   return {
     async transcribe({ purpose, signal }) {
@@ -89,6 +111,30 @@ export function createMockService({ config }) {
         return { data: { action: 'create', id: '', theme: 'Tone', a: 'Formal and reserved', b: 'Warm and personal' }, usage: null };
       }
       const text = String(input.at(-1)?.content ?? '');
+      // Customer: up to four sentences spread over the draft, each quoted exactly (its first words) with a
+      // canned reaction that fits it (money, opening, a request, anything else). Varies from ask to ask.
+      if (kind === 'customerReactions') {
+        const draft = text.split('The draft you received:\n')[1] ?? '';
+        const sentences = [...draft.matchAll(/[^.!?\n]+[.!?]?/g)].map((m) => m[0].trim())
+          .filter((x) => x.split(/\s+/).length >= 5 && !/^\[.*\]$/.test(x));
+        const n = Math.min(sentences.length, asks % 2 ? 3 : 4);
+        const picked = [...new Set(Array.from({ length: n }, (_, i) => Math.round((i * (sentences.length - 1)) / Math.max(1, n - 1))))].map((i) => sentences[i]);
+        const k = asks++;
+        return {
+          data: {
+            reactions: picked.map((sentence, i) => {
+              const kind2 = /\d|price|cost|licen[cs]e|budget|fee/i.test(sentence) ? 'money'
+                : i === 0 ? 'opening'
+                  : /\?|please|let (?:me|us) know|call|meet|discuss/i.test(sentence) ? 'ask' : 'other';
+              const pool = REACTIONS[kind2];
+              const [tone, reaction] = pool[(k + i) % pool.length];
+              const words = sentence.split(/\s+/);
+              return { quote: words.slice(0, Math.min(words.length, 10)).join(' '), text: reaction, tone };
+            }),
+          },
+          usage: null,
+        };
+      }
       const said = (label) => (text.split(`${label}:\n`)[1] ?? '').split('\n\n')[0].trim();
       const short = (s, n = 6) => s.replace(/^(please|also|maybe|i want you to|can you|could you)\s+/i, '').split(/\s+/).slice(0, n).join(' ').replace(/[.,;:]+$/, '');
       const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);

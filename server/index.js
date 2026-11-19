@@ -16,6 +16,7 @@ import { intentRoutes } from './routes/intents.js';
 import { compareRoutes } from './routes/compare.js';
 import { highlightRoutes } from './routes/highlight.js';
 import { sliderRoutes } from './routes/slider.js';
+import { customerRoutes } from './routes/customer.js';
 
 let loaded;
 try {
@@ -71,6 +72,7 @@ server.use('/api/intents', intentRoutes(app));
 server.use('/api/compare', compareRoutes(app));
 server.use('/api/highlight', highlightRoutes(app));
 server.use('/api/slider', sliderRoutes(app));
+server.use('/api/customer', customerRoutes(app));
 if (env.devMode) server.use('/api/dev', devRoutes(app));
 server.use('/api', (req, res) => res.status(404).json({ error: 'not_found' }));
 

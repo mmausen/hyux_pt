@@ -78,6 +78,14 @@ export const api = {
     start: (round) => request('POST', '/api/slider/start', { json: { round } }),
     voice: (round, text, signal) => request('POST', '/api/slider/voice', { json: { round, text }, signal }),
   },
+  // Customer mode (server/routes/customer.js): the reader's reactions, responses, general instructions.
+  customer: {
+    ask: (round, signal) => request('POST', '/api/customer/ask', { json: { round }, signal }),
+    setPersona: (round, personaId) => request('PUT', '/api/customer/persona', { json: { round, personaId } }),
+    respond: (round, id, text, signal) => request('POST', `/api/customer/reactions/${encodeURIComponent(id)}/respond`, { json: { round, text }, signal }),
+    addNote: (round, text, signal) => request('POST', '/api/customer/notes', { json: { round, text }, signal }),
+    setActive: (round, kind, id, active) => request('PUT', `/api/customer/${kind}/${encodeURIComponent(id)}`, { json: { round, active } }),
+  },
   dev: {
     startSession: () => request('POST', '/api/dev/session', { json: {} }),
     setMock: (mock) => request('PUT', '/api/dev/mock', { json: mock }),

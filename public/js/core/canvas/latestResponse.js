@@ -1,8 +1,10 @@
 // The assistant's latest response, as every mode shows it: only the newest version (earlier ones are
 // stored and logged but not shown), "Version n", and how long ago it was last updated.
 //
-//   const view = createLatestResponse({ assistant, scroller, latest, label });
+//   const view = createLatestResponse({ assistant, scroller, latest, label, decorate });
 //   label(turn) → the text next to the assistant's name (default: Version n)
+//   decorate(turn) → nodes that replace the plain text of a finished response, or null (the customer mode
+//                    highlights the passages the reader reacted to)
 //   view.render({ inflight, latest, error }) → element for the response column
 //   view.delta(text)   streaming text so far (cheap partial update)
 //   view.markUpdated() a response just finished
@@ -16,7 +18,7 @@ const timeOf = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', mi
 export const agentAvatar = () => h('span.fh-agent-avatar.fh-agent-avatar--xs', { 'aria-hidden': 'true' }, icon('ai'));
 export const busy = (text) => h('div.fh-msg-agent__thinking', h('span.fh-busy', { 'aria-hidden': 'true' }, h('i'), h('i'), h('i')), text);
 
-export function createLatestResponse({ assistant, scroller, latest = null, label = (turn) => (turn.n ? t('canvas.versionLabel', { n: turn.n }) : null) }) {
+export function createLatestResponse({ assistant, scroller, latest = null, label = (turn) => (turn.n ? t('canvas.versionLabel', { n: turn.n }) : null), decorate = null }) {
   // When the shown response was last updated, in browser time (a finished turn's respondedAt is server
   // time, so it is only used for a response that was already there when the page loaded).
   let updatedAt = (() => {
@@ -43,7 +45,7 @@ export function createLatestResponse({ assistant, scroller, latest = null, label
     const body = h('div.fh-msg-agent__body');
     const text = streaming ? cleanResponse(turn.response, { partial: true }) : turn.response;
     if (streaming && !text) body.append(busy(t('canvas.working')));
-    else body.append(h('p.vc-response', text));
+    else body.append(h('p.vc-response', (!streaming && decorate?.(turn)) || text));
     if (!streaming) renderUpdated();
     return h('div.fh-msg-agent.vc-turn__response', agentAvatar(), h('div.vc-turn__agent',
       h('div.vc-turn__meta', h('span.vc-turn__name', assistant), (() => { const l = label(turn); return l ? h('span', l) : null; })(),

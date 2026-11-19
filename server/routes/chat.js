@@ -10,12 +10,16 @@
 // starting draft or, after it, the previous version with what changed (ai.slider.anchorInstruction).
 // The same decisions in the same positions give the same text again: a cached version is returned
 // without asking the model (turn.cachedFrom), so every difference comes from moving a slider.
+// Customer mode: { round, customer: { reactionIds, noteIds } }. The model gets no history, only the latest
+// draft, the reader's reactions that are on (with the participant's responses) and the participant's general
+// instructions (config.ai.customer.reviseInstruction); the turn records them (turn.customer).
 // The server owns the conversation: turns are stored in session.rounds[round].turns.
 // Response: NDJSON stream of {type:'delta', text} … then {type:'done', turn} or {type:'error', error}.
 import { Router } from 'express';
 import { requireSession, useMock } from '../middleware/session.js';
 import { rateLimit } from '../middleware/rateLimit.js';
-import { baseDraft, structureIntents, groupOf, groupsView, taskFor, componentsText } from './intents.js';
+import { baseDraft, latestDraft, structureIntents, groupOf, groupsView, taskFor, componentsText } from './intents.js';
+import { customerRevision } from './customer.js';
 import { activeSliders, describe, changes, cacheKey, POSITIONS, BALANCED } from '../services/sliders.js';
 import { cleanResponse } from '../../public/js/core/cleanResponse.js';
 
@@ -38,9 +42,10 @@ export function chatRoutes(app) {
     let text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
     const intentIds = Array.isArray(req.body?.intentIds) ? req.body.intentIds : null;
     const sliderValues = Array.isArray(req.body?.sliders) ? req.body.sliders : null;
+    const custIds = req.body?.customer && typeof req.body.customer === 'object' ? req.body.customer : null;
     // Round 0 is the tutorial practice turn; rounds 1..N are tasks.
     if (!Number.isInteger(round) || round < 0 || round > session.plan.length) return res.status(400).json({ error: 'bad_round' });
-    if (!intentIds && !sliderValues && !text) return res.status(400).json({ error: 'empty' });
+    if (!intentIds && !sliderValues && !custIds && !text) return res.status(400).json({ error: 'empty' });
     if (text.length > MAX_CHARS) return res.status(413).json({ error: 'too_long' });
 
     const key = String(round);
@@ -53,7 +58,23 @@ export function chatRoutes(app) {
     let settings = null;
     let cached = null;
     let sliderKey = null;
-    if (sliderValues) {
+    let customer = null; // { reactions, notes }: stored objects sent with this turn
+    let custRecord = null;
+    if (custIds) {
+      // Customer: the latest draft, the reactions that are on (with responses) and the general instructions.
+      const draft = latestDraft(roundData);
+      const cust = roundData.customer ?? { reactions: [], notes: [] };
+      const ids = (v) => (Array.isArray(v) ? v : []);
+      customer = {
+        reactions: cust.reactions.filter((x) => ids(custIds.reactionIds).includes(x.id)),
+        notes: cust.notes.filter((x) => ids(custIds.noteIds).includes(x.id)),
+      };
+      if (!customer.reactions.length && !customer.notes.length) return res.status(400).json({ error: 'no_changes' });
+      const rev = customerRevision(config, { ...customer, draft });
+      text = rev.text;
+      custRecord = rev.record;
+      input = rev.input;
+    } else if (sliderValues) {
       // Every active slider with its position (balanced if the browser sent none).
       settings = activeSliders(roundData).map(({ id, theme, a, b }) => {
         const v = sliderValues.find((x) => x?.id === id)?.value;
@@ -84,6 +105,7 @@ export function chatRoutes(app) {
     const turn = { n: roundData.turns.length + 1, transcript: text, response: '', status: 'pending', sentAt: new Date().toISOString() };
     if (settings) Object.assign(turn, { kind: 'slider', sliders: settings });
     if (cached) turn.cachedFrom = cached.n;
+    if (custRecord) turn.customer = custRecord;
     roundData.turns.push(turn);
     session.rounds[key] = roundData;
     await store.update(session, (s) => { s.rounds[key] = roundData; });
@@ -134,7 +156,7 @@ export function chatRoutes(app) {
       turn.transcript = text;
       turn.intents = intents.map((x) => ({ id: x.id, group: groupOf(x), text: x.text, reason: x.reason ?? '', nuance: x.nuance ?? '', updatedAt: x.updatedAt }));
     }
-    log.write('server.ai.request', { turn: turn.n, model: cached ? 'cache' : service === mock ? 'mock' : config.ai.model, historyTurns: history.length / 2, chars: text.length, text, intents: turn.intents, sliders: turn.sliders, cachedFrom: turn.cachedFrom });
+    log.write('server.ai.request', { turn: turn.n, model: cached ? 'cache' : service === mock ? 'mock' : config.ai.model, historyTurns: history.length / 2, chars: text.length, text, intents: turn.intents, sliders: turn.sliders, cachedFrom: turn.cachedFrom, customer: turn.customer });
 
     const started = Date.now();
     let firstTokenMs = null;
@@ -152,6 +174,7 @@ export function chatRoutes(app) {
       if (response !== out.text) turn.rawResponse = out.text;
       Object.assign(turn, { response, status: 'done', respondedAt: new Date().toISOString(), latencyMs: Date.now() - started, firstTokenMs, usage: out.usage ?? undefined, mock: service === mock || undefined });
       for (const x of intents ?? []) x.sentIn = [...(x.sentIn ?? []), turn.n];
+      for (const x of [...(customer?.reactions ?? []), ...(customer?.notes ?? [])]) x.sentIn = [...(x.sentIn ?? []), turn.n];
       if (sliderKey && !cached) (roundData.sliderCache ??= {})[sliderKey] = turn.n;
       await store.update(session, () => {});
       log.write('server.ai.response', {

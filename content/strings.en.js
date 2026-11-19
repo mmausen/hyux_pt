@@ -176,6 +176,13 @@ export default {
       rateLimited: 'Too many requests in a short time. Wait a moment and try again.',
       mic: 'The microphone could not be started. Check that the browser may use it, then try again.',
       pendingLost: 'The last response could not be loaded. Send your instruction again.',
+      customerAsk: 'The customer could not read the draft. Try again.',
+      customerBusy: 'The customer is still reading the draft. Wait a moment and try again.',
+      customerLost: 'The customer’s reactions could not be loaded. Ask the customer again.',
+      reactionRespond: 'Your response could not be added. Try again.',
+      reactionToggle: 'This could not be switched. Try again.',
+      noteAdd: 'Your instruction could not be added. Try again.',
+      personaChange: 'The customer could not be changed. Try again.',
     },
   },
 
@@ -332,6 +339,37 @@ export default {
     full: 'There can be at most {max} sliders. Remove one first.',
     noChange: 'No slider to add or remove was found in what you said. Try other words.',
   },
+
+  // Customer mode (public/js/modes/customer): the customer's reactions in the margin next to the draft.
+  customer: {
+    panelLabel: 'Customer',
+    personaLabel: 'Customer',
+    ask: 'Ask Customer',
+    askAgain: 'Ask Customer Again',
+    reading: '{name} is reading the draft',
+    reactionsLabel: 'Reactions to {version}',
+    startingDraft: 'the Starting Draft',
+    count: '{active} of {total} on',
+    empty: 'Select Ask Customer. The customer reads the draft and reacts to it here, passage by passage.',
+    emptyAgain: 'This version is new. Select Ask Customer to hear how it lands now.',
+    tone: { positive: 'Positive', neutral: 'Neutral', negative: 'Negative' },
+    showPassage: 'Show the passage in the draft',
+    you: 'You',
+    useLabel: 'Use reaction: {text}',
+    useNoteLabel: 'Use instruction: {text}',
+    respondHold: 'Hold to Respond',
+    respondStart: 'Respond by Voice',
+    respondStop: 'Stop Recording',
+    addingResponse: 'Adding your response',
+    notesLabel: 'Your Instructions',
+    notesEmptyPushToTalk: 'To say something that is not about a reaction, hold the record button or the Space key.',
+    notesEmptyToggle: 'To say something that is not about a reaction, select the record button.',
+    addingNote: 'Adding your instruction',
+    earlier: 'Earlier reactions ({n})',
+    usedFor: 'Used for Version {n}',
+    notUsed: 'Not used',
+    send: 'Send Changes',
+  },
   tutorial: {
     progress: '{step} of {total}',
     next: 'Next',
@@ -360,12 +398,31 @@ export default {
       timer: { title: 'Keep an Eye on the Time', text: 'This bar fills up as time passes. Time keeps running while the assistant writes.' },
       finish: { title: 'Finish the Task', text: 'Select Finish Task when you are happy with the result. You can finish at any time, also before the time limit.' },
     },
-    // Example content shown on the canvas during the tour. intents: used by the intents mode only.
+    customer: {
+      task: { title: 'Your Task', text: 'Your task and its situation are always shown at the top. Select Show Task to read them again.' },
+      output: { title: 'Read the Draft', text: 'Each task starts with a generic starting draft. The latest version appears here; each new version replaces the previous one.' },
+      persona: { title: 'Choose Your Customer', text: 'This is the person who reads your draft. You can switch to another customer at any time. The change applies to the next reactions.' },
+      ask: { title: 'Ask the Customer', text: 'The customer reads the current draft and tells you how it lands: a few short reactions, in their own words. The customer only reacts; what to change is up to you.' },
+      reactions: { title: 'See How It Lands', text: 'Each reaction appears here as a card, marked positive, neutral or negative. The passage it is about is highlighted in the draft with the same number. Point at one to see the other.' },
+      cardPushToTalk: { title: 'Respond to a Reaction', text: 'Hold the microphone on a card and say what you want to do about this reaction. Your response is shown on the card. Clear the box to leave a reaction out of the next version.' },
+      cardToggle: { title: 'Respond to a Reaction', text: 'Select the microphone on a card, say what you want to do about this reaction and select it again. Your response is shown on the card. Clear the box to leave a reaction out of the next version.' },
+      recordPushToTalk: { title: 'Add Your Own Instructions', text: 'Hold this button, or the Space key, to say something that is not about one reaction, for example a change of tone. It appears under Your Instructions.' },
+      recordToggle: { title: 'Add Your Own Instructions', text: 'Select this button to say something that is not about one reaction, for example a change of tone, and select it again when you are done. It appears under Your Instructions.' },
+      send: { title: 'Send Your Changes', text: 'Sends the reactions that are ticked, with your responses and instructions, and the latest draft to the assistant. It writes the next version. The reactions then move to Earlier Reactions, and you can ask the customer again.' },
+      timer: { title: 'Keep an Eye on the Time', text: 'This bar fills up as time passes. Time keeps running while the customer reads and the assistant writes.' },
+      finish: { title: 'Finish the Task', text: 'Select Finish Task when you are happy with the result. You can finish at any time, also before the time limit.' },
+    },
+    // Example content shown on the canvas during the tour. intents: used by the intents mode only;
+    // customer and task.personas: by the customer mode only.
     sample: {
       task: {
         title: 'Example Task',
         task: 'Use the assistant to write a short thank-you email to a customer after a meeting.',
         situation: 'You met Jonas Weber, a purchasing manager, yesterday. The meeting went well and he asked for a price list.',
+        personas: [
+          { id: 'buyer', name: 'Purchasing Manager', role: 'Main contact', about: 'Met you yesterday and asked for a price list.' },
+          { id: 'sceptic', name: 'Head of Finance', role: 'Sceptical buyer', about: 'Compares every offer and looks for hidden costs.' },
+        ],
       },
       turns: [
         {
@@ -382,6 +439,15 @@ export default {
         { text: 'Make it a bit more personal', group: 'Tone', reason: 'We have known each other for years', quote: 'Make it a bit more personal, we have known each other for years.' },
         { text: 'Mention the new delivery options', group: 'Details', reason: 'He asked about shorter delivery times', quote: 'And mention the new delivery options, he asked about shorter delivery times.' },
       ],
+      // Customer mode: reactions to the first response above (quote: its exact words).
+      customer: {
+        reactions: [
+          { quote: 'Thank you for taking the time to meet with me yesterday.', text: 'Polite, but every supplier writes this.', tone: 'neutral' },
+          { quote: 'As promised, I have attached our current price list.', text: 'Good, you remembered what I asked for.', tone: 'positive' },
+          { quote: 'I look forward to hearing from you.', text: 'So what happens next? This puts it all on me.', tone: 'negative', responses: ['Suggest a short call next week to go through the prices.'] },
+        ],
+        notes: ['Make it a bit more personal, we have known each other for years.'],
+      },
     },
     practice: {
       task: {
@@ -399,6 +465,23 @@ export default {
           scaffold: 'Subject: [Subject line]\n\nDear [Name],\n\n[Thank the customer for the meeting.]\n\n[Refer to what was discussed and what you send with this email.]\n\n[Closing and next step.]\n\nBest regards,\n[Your name]',
         },
         intro: 'Try it out: say what to change, then send the intents to the assistant.',
+      },
+      // Customer mode: the practice starts from a short finished email, so the customer has something to
+      // react to (scaffold and personas are read by the server too).
+      customer: {
+        task: {
+          title: 'Practice',
+          task: 'Ask the customer to read the draft, respond to one reaction by voice and send your changes to the assistant.',
+          situation: 'This is only practice. Nothing you do here counts toward the study.',
+          scaffold: 'Subject: Thank you for yesterday’s meeting\n\nDear Mr. Weber,\n\nThank you for taking the time to meet with me yesterday. As promised, I have attached our current price list.\n\nI look forward to hearing from you.\n\nBest regards',
+          personas: [
+            {
+              id: 'buyer', name: 'Purchasing Manager', role: 'Main contact', about: 'Met you yesterday and asked for a price list.',
+              profile: 'You are Jonas Weber, a purchasing manager at a mid-sized manufacturer. You met the writer, a supplier, yesterday; the meeting went well and you asked for a price list. You are busy, friendly and practical, and you want to know what happens next.',
+            },
+          ],
+        },
+        intro: 'Try it out: ask the customer, respond to a reaction, then send your changes.',
       },
       done: 'Well done. You are ready for the tasks.',
       continue: 'Continue to the Tasks',

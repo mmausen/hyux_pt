@@ -31,8 +31,8 @@
 //   DELETE /api/intents/:id            { round }         delete an intent
 //   PUT    /api/intents/components     { round, components }  the participant's settings in the components
 //
-// The starting draft (`scaffold` in data/tasks.json; for the practice round tutorial.practice.intents.task
-// in the strings file) is a generic outline of the task without any choices made. It is stored as turn 1
+// The starting draft (`scaffold` in data/tasks.json; for the practice round tutorial.practice.<mode>.task
+// in the strings file, else tutorial.practice.intents.task) is a generic outline of the task without any choices made. It is stored as turn 1
 // with kind 'scaffold'; no LLM call is involved.
 // The task and the situation reach the collect and structure calls (to understand and place what the
 // participant says), never the call that writes the text. Intents that are off are not shown to the
@@ -123,14 +123,16 @@ export const quotesOf = (x) => (Array.isArray(x.quotes) ? x.quotes : x.quote ? [
 // The group of an intent; intents stored before the groups have a topic.
 export const groupOf = (x) => clean(x.group ?? x.topic);
 
-// The practice round's task (with its starting draft) lives in the strings file.
-let practiceTask = null;
+// The practice round's task (with its starting draft) lives in the strings file: the one of the session's
+// mode (tutorial.practice.<mode>.task), else the intents one.
+let practice = {};
 function loadPractice(config) {
   import(pathToFileURL(path.join(ROOT, 'content', `strings.${config.study.locale}.js`)).href)
-    .then((m) => { practiceTask = m.default?.tutorial?.practice?.intents?.task ?? null; })
+    .then((m) => { practice = m.default?.tutorial?.practice ?? {}; })
     .catch(() => {});
 }
-export const taskFor = (app, round, roundData) => (round === 0 ? practiceTask : app.tasksById.get(roundData.taskId)) ?? {};
+const practiceTask = (mode) => practice[mode]?.task ?? practice.intents?.task ?? null;
+export const taskFor = (app, round, roundData, mode = 'intents') => (round === 0 ? practiceTask(mode) : app.tasksById.get(roundData.taskId)) ?? {};
 
 // The group name as stored: an existing group (matched without regard to case), else the name, shortened.
 function groupName(roundData, raw) {
@@ -410,7 +412,7 @@ export function intentRoutes(app) {
     const { round, key, roundData } = p;
     const first = roundData.turns[0];
     if (first) return res.json({ turn: first.kind === 'scaffold' ? first : null });
-    const scaffold = String(taskFor(app, round, roundData).scaffold ?? '').trim();
+    const scaffold = String(taskFor(app, round, roundData, req.study.mode ?? config.interaction.mode).scaffold ?? '').trim();
     if (!scaffold) return res.json({ turn: null });
     const now = new Date().toISOString();
     const turn = { n: 1, kind: 'scaffold', transcript: '', response: scaffold, status: 'done', sentAt: now, respondedAt: now };
