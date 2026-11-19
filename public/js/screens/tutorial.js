@@ -29,33 +29,45 @@ export default function create() {
         session.update({ tutorial: { ...(session.state.tutorial ?? {}), practice: true } });
         if (!session.progress(PRACTICE_ROUND).taskStartedAt) session.updateProgress(PRACTICE_ROUND, { taskStartedAt: Date.now() }, { immediate: true });
         logEvent('tutorial.practiceStarted', { resumed });
-        const continueBtn = h('button.fh-btn.fh-btn--emphasized', { type: 'button', disabled: true, onclick: () => {
+        // Continue sits at the bottom right, where Finish Task is in a task. It becomes available, with a
+        // light pulse, once the participant has made their first recording (transcribed).
+        // Same size as the send button (vc-send).
+        const continueBtn = h('button.fh-btn.fh-btn--emphasized.vc-send.app-practice__continue', { type: 'button', disabled: true, onclick: () => {
           logEvent('tutorial.completed', { practice: true });
           ctx.flow.next();
         } }, t('tutorial.practice.continue'));
+        const unlock = (reason) => {
+          if (!continueBtn.disabled) return;
+          continueBtn.disabled = false;
+          continueBtn.classList.add('is-pulsing');
+          logEvent('tutorial.practiceUnlocked', { reason });
+        };
         // A mode can bring its own practice task and intro (tutorial.practice.<mode>).
         const practice = raw(`tutorial.practice.${mode.name}`) ?? {};
-        const banner = h('div.app-practice', messageStrip('information', practice.intro ?? t('tutorial.practice.intro')), continueBtn);
+        const banner = h('div.app-practice', messageStrip('information', practice.intro ?? t('tutorial.practice.intro')));
         canvas = mode.createCanvas(ctx, {
           round: PRACTICE_ROUND,
           task: practice.task ?? raw('tutorial.practice.task'),
           live: true,
           showFinish: false,
+          onRecorded: () => unlock('recording'),
           onTurn(turn) {
             logEvent('tutorial.practiceTurn', { turn: turn.n });
-            clear(banner).append(messageStrip('success', t('tutorial.practice.done')), continueBtn);
-            continueBtn.disabled = false;
-            continueBtn.focus();
+            clear(banner).append(messageStrip('success', t('tutorial.practice.done')));
+            unlock('turn');
           },
         });
         canvas.timerSlot.hidden = true;
         canvas.noticeSlot.append(banner);
+        canvas.regions.finish.parentElement.append(continueBtn);
         host.append(canvas.el);
-        // A practice turn that already finished before a reload counts.
-        if ((session.data.rounds?.[String(PRACTICE_ROUND)]?.turns ?? []).some((x) => x.status === 'done' && x.kind !== 'scaffold')) {
-          clear(banner).append(messageStrip('success', t('tutorial.practice.done')), continueBtn);
-          continueBtn.disabled = false;
-        }
+        // A recording or practice turn from before a reload counts.
+        const practiceData = session.data.rounds?.[String(PRACTICE_ROUND)] ?? {};
+        if ((practiceData.turns ?? []).some((x) => x.status === 'done' && x.kind !== 'scaffold')) {
+          clear(banner).append(messageStrip('success', t('tutorial.practice.done')));
+          unlock('resumed');
+        } else if ((practiceData.intents ?? []).length || (session.progress(PRACTICE_ROUND).draft ?? []).length
+          || (practiceData.customer?.notes ?? []).length || (practiceData.customer?.reactions ?? []).some((r) => r.responses?.length)) unlock('resumed');
       };
 
       // Resume straight into the practice turn after a reload.
@@ -67,7 +79,7 @@ export default function create() {
         round: PRACTICE_ROUND,
         task: sample.task,
         live: false,
-        sample: { turns: sample.turns.map((x) => ({ ...x, sentAt: now, respondedAt: now, status: 'done' })), draft: sample.draft, intents: sample.intents ?? [], scaffold: sample.scaffold ?? null },
+        sample: { turns: sample.turns.map((x) => ({ ...x, sentAt: now, respondedAt: now, status: 'done' })), draft: sample.draft, intents: sample.intents ?? [], scaffold: sample.scaffold ?? null, customer: sample.customer ?? null },
       });
       host.append(canvas.el);
 

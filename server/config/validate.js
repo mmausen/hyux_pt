@@ -91,6 +91,10 @@ export function validateConfig(config, { tasks, modes, hasApiKey, devMode }) {
   str('ai.intents.extractPrompt'); str('ai.intents.annotatePrompt'); str('ai.intents.reviseInstruction');
   num('ai.intents.maxOutputTokens', { min: 64, max: 32000, int: true });
   num('ai.intents.hedgeAfterSeconds', { min: 0, max: 600 });
+  str('ai.customer.reactPrompt'); str('ai.customer.reviseInstruction');
+  str('ai.customer.defaultPersona.id'); str('ai.customer.defaultPersona.name'); str('ai.customer.defaultPersona.profile');
+  num('ai.customer.maxReactions', { min: 1, max: 10, int: true });
+  num('ai.customer.maxOutputTokens', { min: 64, max: 32000, int: true });
 
   // stt
   str('stt.model');
@@ -149,6 +153,17 @@ export function validateTasks(tasks) {
       else t.materials.forEach((m, j) => {
         if (typeof m?.title !== 'string' || typeof m?.body !== 'string') errors.push(`${p}: materials[${j}] needs 'title' and 'body' text`);
       });
+    }
+    if (t?.personas !== undefined) {
+      if (!Array.isArray(t.personas)) errors.push(`${p}: 'personas' must be a list`);
+      else {
+        const ids = new Set();
+        t.personas.forEach((x, j) => {
+          for (const f of ['id', 'name', 'profile']) if (typeof x?.[f] !== 'string' || !x[f].trim()) errors.push(`${p}: personas[${j}] needs '${f}' text`);
+          if (ids.has(x?.id)) errors.push(`${p}: personas[${j}] has a duplicate id`);
+          ids.add(x?.id);
+        });
+      }
     }
     if (seen.has(t?.id)) errors.push(`${p}: duplicate id`);
     seen.add(t?.id);

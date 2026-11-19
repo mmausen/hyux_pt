@@ -23,7 +23,7 @@ import { createVoiceInput } from '../../core/canvas/voiceInput.js';
 
 const timeOf = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '');
 
-export function createCanvas(ctx, { round, task, live = true, conceal = false, sample = null, showFinish = true, onTurn = null }) {
+export function createCanvas(ctx, { round, task, live = true, conceal = false, sample = null, showFinish = true, onTurn = null, onRecorded = null }) {
   const { config, session } = ctx;
   const ptt = config.interaction.recordingMode === 'pushToTalk';
 
@@ -142,6 +142,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       onText(text, rec) {
         draft.push({ text, at: new Date().toISOString(), recordingMs: rec.durationMs });
         saveDraft();
+        onRecorded?.();
       },
       onFail(key, retry) {
         if (key === 'mic') controls.recordingStopped();

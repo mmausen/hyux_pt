@@ -27,7 +27,7 @@ import { createVoiceInput } from '../../core/canvas/voiceInput.js';
 const timeOf = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '');
 const errorKey = (e) => (e?.code === 'rate_limited' ? 'rateLimited' : e?.code === 'llm_timeout' || e?.name === 'TimeoutError' ? 'timeout' : null);
 
-export function createCanvas(ctx, { round, task, live = true, conceal = false, sample = null, showFinish = true, onTurn = null }) {
+export function createCanvas(ctx, { round, task, live = true, conceal = false, sample = null, showFinish = true, onTurn = null, onRecorded = null }) {
   const { config, session } = ctx;
   const ptt = config.interaction.recordingMode === 'pushToTalk';
   const aiTimeout = () => AbortSignal.timeout((config.ai.timeoutSeconds + 5) * 1000);
@@ -156,8 +156,9 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     const textEl = h('p.ic-card__text');
     const reasonText = h('span');
     const reasonEl = h('p.ic-card__reason', h('span.ic-card__why', t('intents.why')), reasonText);
-    const quoteText = h('q');
-    const quoteEl = h('details.ic-card__quote', h('summary', t('intents.yourWords')), h('p', quoteText));
+    // Your words: what the intent came from, then every change said for it (oldest first).
+    const wordsEl = h('div.ic-card__words');
+    const quoteEl = h('details.ic-card__quote', h('summary', t('intents.yourWords')), wordsEl);
     quoteEl.addEventListener('toggle', () => logEvent('intent.quoteToggled', { id, open: quoteEl.open }));
     const stateText = h('span');
     const stateEl = h('span.ic-card__state', h('span.ic-card__dot', { 'aria-hidden': 'true' }), stateText);
@@ -165,6 +166,9 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     const check = h('label.fh-checkbox.ic-card__check', toggle, h('span.fh-checkbox__box'));
     const annotateBtn = h('button.fh-btn.fh-btn--transparent.fh-btn--icon.ic-card__annotate', { type: 'button' }, icon('microphone'));
     const status = h('div.ic-card__status', { 'aria-live': 'polite' });
+    // While an annotation is recorded: the input level, so the participant sees that the microphone hears them.
+    const meterFill = h('span', { style: 'width:0%' });
+    const meter = h('div.fh-progress.ic-card__meter', { 'aria-hidden': 'true' }, meterFill);
     const errorSlot = h('div');
     const el = h('li.ic-card', { dataset: { intent: id } },
       h('div.ic-card__row',
@@ -175,7 +179,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
       errorSlot);
 
     // transcribing: the annotation is being converted to text; annotating: the LLM rewrites the intent.
-    const card = { el, transcribing: false, annotating: false, get busy() { return this.transcribing || this.annotating; }, input: null, error: null, recordingSeconds: null };
+    const card = { el, transcribing: false, annotating: false, get busy() { return this.transcribing || this.annotating; }, input: null, error: null, recording: false, words: null };
 
     toggle.addEventListener('change', async () => {
       const intentNow = intents.find((x) => x.id === id);
@@ -229,25 +233,25 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
         keyboard: 'focus',
         log: { target: 'intent', intentId: id },
         busy: (key, on) => conv.setBusy(`${id}:${key}`, on),
-        onStart() { card.error = null; card.recordingSeconds = 0; render(); },
-        onTick(s) { card.recordingSeconds = Math.floor(s); updateCard(card, intents.find((x) => x.id === id)); },
-        onStop() { card.recordingSeconds = null; render(); },
+        onStart() { card.error = null; card.recording = true; meterFill.style.width = '0%'; render(); },
+        onLevel(level) { meterFill.style.width = `${Math.round(level * 100)}%`; },
+        onStop() { card.recording = false; render(); },
         onTranscribing(on) { card.transcribing = on; render(); },
         onText(text) { annotate(text); }, // marks itself busy at once
-        onFail(key, retry) { card.recordingSeconds = null; card.error = { key, retry }; render(); },
+        onFail(key, retry) { card.recording = false; card.error = { key, retry }; render(); },
       });
     }
 
-    card.parts = { textEl, reasonEl, reasonText, quoteEl, quoteText, stateEl, stateText, toggle, check, annotateBtn, status, errorSlot };
+    card.parts = { textEl, reasonEl, reasonText, quoteEl, wordsEl, stateEl, stateText, toggle, check, annotateBtn, status, meter, errorSlot };
     return card;
   }
 
   const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 
   function updateCard(card, intent) {
-    const { textEl, reasonEl, reasonText, quoteEl, quoteText, stateEl, stateText, toggle, check, annotateBtn, status, errorSlot } = card.parts;
+    const { textEl, reasonEl, reasonText, quoteEl, wordsEl, stateEl, stateText, toggle, check, annotateBtn, status, meter, errorSlot } = card.parts;
     const inflight = Boolean(conv.inflight);
-    const recording = card.recordingSeconds !== null;
+    const recording = card.recording;
     const state = stateOf(intent);
     card.el.classList.toggle('is-off', !intent.active);
     card.el.classList.toggle('is-busy', card.busy);
@@ -257,9 +261,13 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     setText(textEl, intent.text);
     reasonEl.hidden = !intent.reason;
     setText(reasonText, intent.reason ?? '');
-    const quote = intent.quote || intent.transcript || '';
-    quoteEl.hidden = !quote;
-    setText(quoteText, quote);
+    const words = [intent.quote || intent.transcript || '', ...(intent.annotations ?? []).map((a) => a.text)].filter(Boolean);
+    quoteEl.hidden = !words.length;
+    const wordsKey = words.join('\n');
+    if (card.words !== wordsKey) {
+      card.words = wordsKey;
+      clear(wordsEl).append(...words.map((w, i) => h('p', i ? h('span.ic-card__change', t('intents.changeWords')) : null, h('q', w))));
+    }
 
     // An applied card sits in the "In the draft" group, which already says so: the dot is enough.
     const label = stateLabel(intent, state);
@@ -282,7 +290,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
     annotateBtn.setAttribute('aria-label', `${action}: ${intent.text}`);
 
     clear(status);
-    if (recording) status.append(t('canvas.recordingStatus', { seconds: card.recordingSeconds }));
+    if (recording) status.append(h('span.app-sr-only', t('intents.recording')), meter);
     else if (card.busy) status.append(busy(t('intents.updating')));
     status.hidden = !status.firstChild;
     clear(errorSlot).append(errorStrip(card.error) ?? '');
@@ -340,7 +348,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
 
     kept.hidden = !applied.length;
     // A recording or a change running in the group keeps it open.
-    const keptBusy = applied.some((c) => c.busy || c.recordingSeconds !== null);
+    const keptBusy = applied.some((c) => c.busy || c.recording);
     const showKept = keptOpen || keptBusy || !live;
     keptList.hidden = !showKept;
     keptToggle.setAttribute('aria-expanded', String(showKept));
@@ -460,6 +468,7 @@ export function createCanvas(ctx, { round, task, live = true, conceal = false, s
         render();
       },
       onText(text, rec) {
+        onRecorded?.();
         if (hasDraft()) { extract(text); return; } // marks itself busy at once
         draft.push({ text, at: new Date().toISOString(), recordingMs: rec.durationMs });
         saveDraft();

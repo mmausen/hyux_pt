@@ -12,7 +12,9 @@ export function sessionView(session, app) {
     isDev: session.isDev,
     mode: session.mode ?? app.config.interaction.mode,
     completed: Boolean(session.completedAt),
-    tasks: session.plan.map((id) => app.tasksById.get(id)).filter(Boolean),
+    // A persona's prompt profile (customer mode) stays on the server; the browser gets name, role, about.
+    tasks: session.plan.map((id) => app.tasksById.get(id)).filter(Boolean)
+      .map((t) => (t.personas ? { ...t, personas: t.personas.map(({ profile, ...p }) => p) } : t)),
     state: session.state,
     rounds: session.rounds,
     dev: app.env.devMode ? session.dev : undefined,

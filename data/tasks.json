@@ -5,6 +5,29 @@
     "situation": "You are a Senior Account Executive at a software company that sells a workforce scheduling platform. Your largest customer, a regional hospital network, has just announced a review of every software contract it holds.\n\nHospitals face rising costs and staff shortages, so the network’s new CFO has asked every vendor to justify its spend before renewal. Your contract covers 1,200 licences and renews in four weeks. Usage data shows that nursing teams rely on the platform every day, while the administrative departments use about a third of their licences. A competitor has offered the network a similar product at a lower price. Your sales director expects the renewal to close at full value, because the quarterly target depends on it.",
     "task": "Write a compelling renewal proposal to the CFO arguing why the hospital network should renew. Make the case for how the platform supports staff wellbeing, improves scheduling efficiency, helps retain nurses and, in the end, contributes to better patient care.",
     "scaffold": "Dear [CFO Name],\n\nThank you for your message about the network’s review of software contracts. This letter sets out our proposal for renewing your workforce scheduling platform agreement.\n\nYour current agreement covers 1,200 licences. We propose renewing the same 1,200 licences for 12-month. The renewal includes platform access, standard support, software updates and hosting.\n\nWe are happy to provide any further information your review needs, including usage reports. Please let us know a convenient time to discuss the renewal.\n\nKind regards,",
+    "personas": [
+      {
+        "id": "cfo",
+        "name": "CFO",
+        "role": "Main contact",
+        "about": "New in the role. Asked every vendor to justify its spend before renewal.",
+        "profile": "You are the new Chief Financial Officer of a regional hospital network. Hospitals face rising costs and staff shortages, and you have asked every vendor to justify its spend before renewal. You know the network has 1,200 licences of this workforce scheduling platform and that a competitor offers a similar product for less. You read closely and you have little time. You want a clear case in numbers: what the network gets for the money, what it would lose, and why this price. Warm words without evidence and pressure to sign make you less willing."
+      },
+      {
+        "id": "procurement",
+        "name": "Head of Procurement",
+        "role": "Sceptical buyer",
+        "about": "Has the competitor’s lower offer on the desk and looks for weak claims.",
+        "profile": "You are the Head of Procurement of a regional hospital network. You have a competitor's lower offer for a similar scheduling platform on your desk, and you know from the usage data that the administrative departments use only about a third of their licences. You are sceptical of vendors by default. You look for vague promises, claims without proof, licences nobody uses and anything that sounds like sales talk, and you notice when a letter avoids the price."
+      },
+      {
+        "id": "nursing",
+        "name": "Chief Nursing Officer",
+        "role": "Daily user",
+        "about": "Nursing teams rely on the platform every day. Cares about staff and patients.",
+        "profile": "You are the Chief Nursing Officer of a regional hospital network. Your nursing teams use this scheduling platform every day, and staff shortages and burnout are your biggest worries. The CFO will ask for your view of this letter. You care about whether it understands the reality on the wards: fair shifts, less overtime, nurses who stay, safe staffing for patients. Corporate language and claims that do not match what you see on the wards put you off."
+      }
+    ],
     "briefing": "",
     "timeLimitMinutes": 7
   },
@@ -14,6 +37,29 @@
     "situation": "You are a Senior Account Executive at a software company that sells a workforce scheduling platform. Your largest customer, a regional hospital network, has just announced a review of every software contract it holds.\n\nHospitals face rising costs and staff shortages, so the network’s new CFO has asked every vendor to justify its spend before renewal. Your contract covers 1,200 licences and renews in four weeks. Usage data shows that nursing teams rely on the platform every day, while the administrative departments use about a third of their licences. A competitor has offered the network a similar product at a lower price. Your sales director expects the renewal to close at full value, because the quarterly target depends on it.",
     "task": "Write a compelling renewal proposal to the CFO arguing why the hospital network should renew. Make the case for how the platform supports staff wellbeing, improves scheduling efficiency, helps retain nurses and, in the end, contributes to better patient care.",
     "scaffold": "Dear [CFO Name],\n\nThank you for your message about the network’s review of software contracts. This letter sets out our proposal for renewing your workforce scheduling platform agreement.\n\nYour current agreement covers 1,200 licences. We propose renewing the same 1,200 licences for 12-month. The renewal includes platform access, standard support, software updates and hosting.\n\nWe are happy to provide any further information your review needs, including usage reports. Please let us know a convenient time to discuss the renewal.\n\nKind regards,",
+    "personas": [
+      {
+        "id": "cfo",
+        "name": "CFO",
+        "role": "Main contact",
+        "about": "New in the role. Asked every vendor to justify its spend before renewal.",
+        "profile": "You are the new Chief Financial Officer of a regional hospital network. Hospitals face rising costs and staff shortages, and you have asked every vendor to justify its spend before renewal. You know the network has 1,200 licences of this workforce scheduling platform and that a competitor offers a similar product for less. You read closely and you have little time. You want a clear case in numbers: what the network gets for the money, what it would lose, and why this price. Warm words without evidence and pressure to sign make you less willing."
+      },
+      {
+        "id": "procurement",
+        "name": "Head of Procurement",
+        "role": "Sceptical buyer",
+        "about": "Has the competitor’s lower offer on the desk and looks for weak claims.",
+        "profile": "You are the Head of Procurement of a regional hospital network. You have a competitor's lower offer for a similar scheduling platform on your desk, and you know from the usage data that the administrative departments use only about a third of their licences. You are sceptical of vendors by default. You look for vague promises, claims without proof, licences nobody uses and anything that sounds like sales talk, and you notice when a letter avoids the price."
+      },
+      {
+        "id": "nursing",
+        "name": "Chief Nursing Officer",
+        "role": "Daily user",
+        "about": "Nursing teams rely on the platform every day. Cares about staff and patients.",
+        "profile": "You are the Chief Nursing Officer of a regional hospital network. Your nursing teams use this scheduling platform every day, and staff shortages and burnout are your biggest worries. The CFO will ask for your view of this letter. You care about whether it understands the reality on the wards: fair shifts, less overtime, nurses who stay, safe staffing for patients. Corporate language and claims that do not match what you see on the wards put you off."
+      }
+    ],
     "briefing": "",
     "timeLimitMinutes": 7
   },
@@ -23,6 +69,29 @@
     "situation": "You are a Senior Account Executive at a software company that sells a workforce scheduling platform. Your largest customer, a regional hospital network, has just announced a review of every software contract it holds.\n\nHospitals face rising costs and staff shortages, so the network’s new CFO has asked every vendor to justify its spend before renewal. Your contract covers 1,200 licences and renews in four weeks. Usage data shows that nursing teams rely on the platform every day, while the administrative departments use about a third of their licences. A competitor has offered the network a similar product at a lower price. Your sales director expects the renewal to close at full value, because the quarterly target depends on it.",
     "task": "Write a compelling renewal proposal to the CFO arguing why the hospital network should renew. Make the case for how the platform supports staff wellbeing, improves scheduling efficiency, helps retain nurses and, in the end, contributes to better patient care.",
     "scaffold": "Dear [CFO Name],\n\nThank you for your message about the network’s review of software contracts. This letter sets out our proposal for renewing your workforce scheduling platform agreement.\n\nYour current agreement covers 1,200 licences. We propose renewing the same 1,200 licences for 12-month. The renewal includes platform access, standard support, software updates and hosting.\n\nWe are happy to provide any further information your review needs, including usage reports. Please let us know a convenient time to discuss the renewal.\n\nKind regards,",
+    "personas": [
+      {
+        "id": "cfo",
+        "name": "CFO",
+        "role": "Main contact",
+        "about": "New in the role. Asked every vendor to justify its spend before renewal.",
+        "profile": "You are the new Chief Financial Officer of a regional hospital network. Hospitals face rising costs and staff shortages, and you have asked every vendor to justify its spend before renewal. You know the network has 1,200 licences of this workforce scheduling platform and that a competitor offers a similar product for less. You read closely and you have little time. You want a clear case in numbers: what the network gets for the money, what it would lose, and why this price. Warm words without evidence and pressure to sign make you less willing."
+      },
+      {
+        "id": "procurement",
+        "name": "Head of Procurement",
+        "role": "Sceptical buyer",
+        "about": "Has the competitor’s lower offer on the desk and looks for weak claims.",
+        "profile": "You are the Head of Procurement of a regional hospital network. You have a competitor's lower offer for a similar scheduling platform on your desk, and you know from the usage data that the administrative departments use only about a third of their licences. You are sceptical of vendors by default. You look for vague promises, claims without proof, licences nobody uses and anything that sounds like sales talk, and you notice when a letter avoids the price."
+      },
+      {
+        "id": "nursing",
+        "name": "Chief Nursing Officer",
+        "role": "Daily user",
+        "about": "Nursing teams rely on the platform every day. Cares about staff and patients.",
+        "profile": "You are the Chief Nursing Officer of a regional hospital network. Your nursing teams use this scheduling platform every day, and staff shortages and burnout are your biggest worries. The CFO will ask for your view of this letter. You care about whether it understands the reality on the wards: fair shifts, less overtime, nurses who stay, safe staffing for patients. Corporate language and claims that do not match what you see on the wards put you off."
+      }
+    ],
     "briefing": "",
     "timeLimitMinutes": 7
   }

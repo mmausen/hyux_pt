@@ -10,16 +10,17 @@ This is a research prototype for a voice-driven AI task study. Participants are 
 
 ## Interactions and branches
 
-The prototype compares four ways of working with the AI on the same tasks. Every task starts from the same neutral starting draft, and every interaction keeps the task panel at the top and the time bar at the bottom. Each interaction lives on its own branch. `main` also keeps the basic `voice` mode.
+The prototype compares five ways of working with the AI on the same tasks. Every task starts from the same neutral starting draft, and every interaction keeps the task panel at the top and the time bar at the bottom. Each interaction lives on its own branch. `main` also keeps the basic `voice` mode.
 
 | Interaction | Branch | How it works |
 |---|---|---|
 | **Intents** | [`main`](https://github.com/mmausen/hyux_pt/tree/main) | The participant thinks aloud. Each recording is split into intents: short change requests, each with the participant's reason. They appear as cards that can be switched on or off and changed by voice. **Send** hands the AI the intents that are on plus the latest draft, and the AI writes the next version. |
 | **Highlight** | [`highlight`](https://github.com/mmausen/hyux_pt/tree/highlight) | The participant selects text in the draft. It is framed as a pill for one line or a rounded box for several lines, with icons to add a voice annotation and to send it to the AI. The AI returns targeted edits, and only the affected passages change. **Challenge Me** uses the annotation, the selection and the whole text to ask one short question that makes the participant reconsider their standpoint. It appears as a popup and needs no answer. |
 | **Slider** | [`slider`](https://github.com/mmausen/hyux_pt/tree/slider) | The draft is on the left and a "slot machine" of sliders on the right. Each slider is one key decision between two contrasting poles, for example "Close fast, apply pressure" vs. "Take it slow, build trust". **Send Settings** writes a version from the combined settings. Generation is anchored on the previous version and cached per setting, so each change shows its own effect. By voice, the participant can add a slider (the AI finds the two poles) or remove one. |
+| **Customer** | [`customer`](https://github.com/mmausen/hyux_pt/tree/customer) | "Customer in the Room": the AI plays the reader of the draft (the customer) and only reacts, the way that person would while reading. **Ask Customer** returns two to five short first-person reactions ("This feels pushy."), each tied to an exact passage, which is highlighted in the draft, and marked positive, neutral or negative. The participant switches reactions on or off, responds to them by voice and adds general instructions. **Send Changes** writes the next version from these. The customer never suggests wording: the participant decides what to change. A switcher picks the customer persona (for example the CFO or a sceptical buyer). |
 | **Compare** | [`compare`](https://github.com/mmausen/hyux_pt/tree/compare) | Two similar but not identical versions stand side by side. The participant picks the one they prefer and says what they like most about it. This feeds a hidden preference profile. The picked version stays, and the other is replaced by a new one written from the profile. Step by step the profile gets richer and the versions converge, until the participant accepts one as final. |
 
-To try an interaction, check out its branch. Each branch has its own interaction as the default `interaction.mode` in `config.js`. The tutorial exists only for `voice` and `intents`.
+To try an interaction, check out its branch. Each branch has its own interaction as the default `interaction.mode` in `config.js`. The tutorial exists only for `voice`, `intents` and `customer`.
 
 ---
 
@@ -91,7 +92,7 @@ post:  end
 |---|---|
 | **welcome** | The participant enters their ID, and the server checks it. A small or unsupported browser gets a notice here. |
 | **systemCheck** | Microphone permission, then a level meter. The participant reads the test sentence aloud, the recording is transcribed, and one short LLM call is made. Each check can be retried. After `retriesBeforeContact` failed retries, a contact text appears. |
-| **tutorial** | A guided tour over a sample canvas that highlights one area at a time. Then, if `tutorial.practiceTurn` is on, one real instruction is sent to the assistant. |
+| **tutorial** | A guided tour over a sample canvas that highlights one area at a time. Then, if `tutorial.practiceTurn` is on, a practice round with real recording. **Continue to the Tasks** sits at the bottom right and becomes available, with a light pulse, after the first recording. |
 | **briefing** | A dialog over the canvas shows the full scenario (situation and task) and the recommended time limit, so reading does not count toward task time. The task text behind it is hidden. **Start Task** starts the timer. |
 | **task** | The main canvas of the session's [interaction mode](#interaction-modes). The task panel starts collapsed to the task title; **Show Task** opens the task with the situation (and any materials) next to it, and **Hide Task** collapses it again. Only the assistant's latest response is shown (each new one replaces it), with how long ago it was updated. Earlier responses stay stored and logged. The participant keeps going until they select **Finish Task** or time runs out. |
 | **survey** | The questionnaire about the task, either built in or a link to an external tool. |
@@ -117,10 +118,20 @@ Each session has one interaction mode, set from `interaction.mode` in `config.js
 **`intents`.** The participant thinks aloud, and what they say becomes intents: short change requests for the draft.
 
 1. **Starting draft.** Every task starts from the same generic starting draft, the task's `scaffold` in `data/tasks.json`: a plain, neutral version of the deliverable (placeholders in square brackets where needed), without any personal flavour or strategic choice. It is shown as **Starting Draft** (no AI call; the server stores it as turn 1 with `kind: 'scaffold'`), and the first AI response is Version 1. The practice round's starting draft is `tutorial.practice.intents.task.scaffold` in the strings file. A task without a `scaffold` starts as in the voice mode instead: recordings build the first instruction, **Send Instruction** sends it as spoken, and the response is the first draft.
-2. **Intent cards.** From then on, each recording is transcribed and the LLM splits it into one or more intents (`ai.intents.extractPrompt`, with the latest draft as context). Each intent has the request (`text`), the participant's reason for it (`reason`, only what they said, empty if they gave none) and their own words (`quote`). It becomes a compact card next to the draft, newest first: a checkbox (on/off), the request, the reason under **Why**, the own words folded under **Your words**, a state (**New** = not sent yet, **Changed** = changed by voice since it was last sent, **In Version n** = last sent in an older version) and a microphone (**Hold to Change**) that shows on hover or focus. Holding it records an annotation; on release it is transcribed and the LLM rewrites the intent and its reason (`ai.intents.annotatePrompt`). Intents that are in the latest version and unchanged since move to a collapsed **In the draft (n)** group at the bottom, so new thinking stays in view. Switching a card on or off never moves it; changing an intent in the group by voice moves it back up.
+2. **Intent cards.** From then on, each recording is transcribed and the LLM splits it into one or more intents (`ai.intents.extractPrompt`, with the latest draft as context). Each intent has the request (`text`), the participant's reason for it (`reason`, only what they said, empty if they gave none) and their own words (`quote`). It becomes a compact card next to the draft, newest first: a checkbox (on/off), the request, the reason under **Why**, the own words folded under **Your words** (what the intent came from, then each change said for it, marked **Change**), a state (**New** = not sent yet, **Changed** = changed by voice since it was last sent, **In Version n** = last sent in an older version) and a microphone (**Hold to Change**). Holding it records an annotation, with a level meter on the card while recording; on release it is transcribed and the LLM rewrites the intent and its reason (`ai.intents.annotatePrompt`). Intents that are in the latest version and unchanged since move to a collapsed **In the draft (n)** group at the bottom, so new thinking stays in view. Switching a card on or off never moves it; changing an intent in the group by voice moves it back up.
 3. **Send** hands the model only the intents that are on, each with its reason (`- text (why: reason)`), plus the latest draft (`ai.intents.reviseInstruction`), not the history. The button counts what it sends, for example **Send 2 New + 4 Kept** (new or changed intents, and intents already in the draft). The response is the next version. The cards stay, so intents that stay on are sent again with every version; new recordings add new cards.
 
 Only one recording runs at a time. While the assistant writes, the cards are locked. The task end waits for running transcriptions, intent extractions and changes. Intents are stored with the session (`rounds[round].intents`) and survive a reload.
+
+**`customer`** ("Customer in the Room"). The AI plays the recipient of the draft and reacts to it the way that person would while reading. It only reacts and never suggests wording or solutions; the participant decides what to change. The aim is to move the participant from specifying text to judging how the text lands with the reader.
+
+1. **Starting draft.** As in the intents mode, the task starts from its `scaffold` (`/api/intents/start`). The practice round starts from `tutorial.practice.customer.task.scaffold`, a short finished email, so the customer has something to react to.
+2. **Customer.** Above the margin, a switcher picks the customer persona: the task's `personas` in `data/tasks.json` (the first is the default), or, for a task without any, one generic busy decision-maker (`ai.customer.defaultPersona`). A change affects only reactions asked for after it. Under the switcher, a short line says who the persona is (`about`).
+3. **Ask Customer.** The customer reads the latest draft (`ai.customer.reactPrompt`; the model sees the persona's `profile` and the draft, nothing else) and returns two to five reactions in the first person. Each has the exact passage it refers to (`quote`), the reaction (`text`) and a tone (`positive`, `neutral`, `negative`). The server finds each passage in the draft, also when the model changed quote marks or spacing; a passage it cannot find keeps its card but gets no highlight. The reactions appear as numbered cards in the margin, in the order of their passages, and each passage is highlighted in the draft with the same number and the tone's colour. Pointing at a card lights up its passage and the other way round; selecting the passage on a card scrolls to it, and selecting a highlight shows its card. The customer can be asked again at any time, also as another persona; new reactions join the list.
+4. **Reactions.** Each card can be switched on or off. Its microphone (**Hold to Respond**) records a response; the transcript is shown on the card under **You**, and a reaction with a response is switched on. The main record button adds **general instructions** that are not tied to a reaction; they are listed under **Your Instructions** with their own on/off switch.
+5. **Send Changes** hands the model the latest draft, the reactions that are on (with persona, tone, passage and the participant's responses) and the general instructions that are on (`ai.customer.reviseInstruction`), not the history. A reaction that is on but has no response asks the model to change the passage so the reaction would no longer arise; a positive one without response marks what to keep. The response is the next version. The reactions of the previous version, and the instructions sent with it, then move into a collapsed **Earlier reactions** group (read-only, each marked **Used for Version n** or **Not used**), and the customer can be asked again.
+
+While the customer reads or the assistant writes, the cards are locked. The task end waits for a running ask, transcription or response. Everything is stored with the session (`rounds[round].customer`, see `server/routes/customer.js`) and survives a reload. An ask is stored before the LLM call and finished on the server even if the page goes away: after a reload while the customer is reacting, the margin shows "… is reading the draft" and the reactions appear when they arrive.
 
 ---
 
@@ -168,7 +179,7 @@ The tasks for a session are assigned when it starts and stored with it. Changing
 #### `interaction`
 | Option | Meaning |
 |---|---|
-| `mode` | Default interaction mode for new sessions (currently `'intents'`): a folder in `public/js/modes/` (`'voice'` or `'intents'`, see [Interaction modes](#interaction-modes)). The dev panel can switch the current session. |
+| `mode` | Default interaction mode for new sessions (on this branch `'customer'`): a folder in `public/js/modes/` (`'voice'`, `'intents'` or `'customer'`, see [Interaction modes](#interaction-modes)). The dev panel can switch the current session. |
 | `recordingMode` | `'pushToTalk'`: hold the button or the Space key. Space works only when focus isn't in a text field. `'toggle'`: select once to start and again to stop. The tutorial text follows this setting. |
 | `maxRecordingSeconds` | A recording stops automatically after this long and is transcribed. |
 
@@ -202,6 +213,11 @@ Participants see time only as a progress bar under the controls, with no countdo
 | `intents.annotatePrompt` | Intents mode: instructions for rewriting one intent from a spoken annotation. Gets the intent and its reason; returns JSON (`{ text, reason }`). |
 | `intents.reviseInstruction` | Intents mode: put before the active intents (with their reasons) and the latest draft when **Send** is selected. The draft is written with `systemPrompt` as usual. |
 | `intents.maxOutputTokens` | Upper limit for the intent calls. |
+| `customer.reactPrompt` | Customer mode: instructions for the customer's reactions. The model gets the persona (`name`, `role`, `profile`) and the latest draft and returns JSON (`{ reactions: [{ quote, text, tone }] }`). It must only react, never suggest wording. |
+| `customer.reviseInstruction` | Customer mode: put before the reactions that are on (with the responses), the general instructions and the latest draft when **Send Changes** is selected. The draft is written with `systemPrompt` as usual. |
+| `customer.defaultPersona` | Customer mode: the persona for a task without `personas` (`id`, `name`, `role`, `about`, `profile`). By default one generic busy decision-maker. |
+| `customer.maxReactions` | Customer mode: at most this many reactions per ask are kept (the prompt asks for two to five). |
+| `customer.maxOutputTokens` | Customer mode: upper limit for one ask. Asks use the same hedging as the intent calls (`intents.hedgeAfterSeconds`). |
 | `intents.hedgeAfterSeconds` | If an intent call (extract or change) has not answered after this many seconds, a second, identical request starts and the first answer is used. Intent calls usually take 2–3 s; this cuts the rare request that takes 20 s or more. `0` = off. The log shows `attempts` (requests started) and `attempt` (which one answered). |
 
 #### `stt` (speech-to-text)
@@ -262,6 +278,9 @@ Tasks are in `data/tasks.json`:
   "task": "The instruction: what the participant should get the assistant to produce.",
   "briefing": "Short text shown before the task starts (may be empty).",
   "scaffold": "Generic starting draft for the intents mode: an outline with [placeholders], no choices made.",
+  "personas": [
+    { "id": "cfo", "name": "CFO", "role": "Main contact", "about": "Shown under the switcher.", "profile": "Who the customer is, for the model: role, situation, what they care about." }
+  ],
   "timeLimitMinutes": 6,
   "materials": [
     { "title": "Booth Notes", "body": "Text. Line breaks are kept." }
@@ -269,7 +288,8 @@ Tasks are in `data/tasks.json`:
 }
 ```
 
-- `id`, `title`, `situation`, `task` and `timeLimitMinutes` are required. `briefing` may be an empty string. `materials` and `scaffold` are optional. `scaffold` is only used by the intents mode, and it is the one part of the task the model sees (as the first current draft).
+- `id`, `title`, `situation`, `task` and `timeLimitMinutes` are required. `briefing` may be an empty string. `materials`, `scaffold` and `personas` are optional. `scaffold` is used by the intents and customer modes, and it is the one part of the task the model sees (as the first current draft).
+- `personas` is only used by the customer mode: the customers who can read the draft, the first being the default. `id`, `name` and `profile` are required; `role` and `about` are shown to the participant. The `profile` is what the model knows about the customer; it is the only other part of the task the model sees, and it is never sent to the browser. The three tasks have a CFO (the main contact), a Head of Procurement (a sceptical buyer) and a Chief Nursing Officer (a daily user).
 - The briefing shows `situation` and `task` in full. During the task the task panel starts collapsed; **Show Task** opens the task, the situation and any materials.
 - Use a blank line (`\n\n`) in `situation` to separate paragraphs. Line breaks are kept.
 - The layout is checked for a situation of about 120 words and a task of about 40 words, at 1024×768 and larger. Much longer texts still work but scroll.
@@ -313,14 +333,14 @@ export function createCanvas(ctx, options) { … }          // the task UI
 export function tutorialSteps({ recordingMode }) { … }    // the tutorial tour
 ```
 
-**`createCanvas(ctx, { round, task, live, conceal, sample, showFinish, onTurn })`** builds the task UI and returns:
+**`createCanvas(ctx, { round, task, live, conceal, sample, showFinish, onTurn, onRecorded })`** builds the task UI and returns:
 
 | Member | Used by | Purpose |
 |---|---|---|
 | `el` | all | Root element; the screen inserts it. |
 | `timerSlot` | task | Element where the task screen puts the timer bar. |
 | `noticeSlot` | task, tutorial | Element for notices (time warnings, practice banner). |
-| `getRegion(name)` | tutorial | Returns the element for a tour step (`task`, `record`, `transcript`, `send`, `output`, `timer`, `finish` in the voice mode; the intents mode adds `intents` and `intentCard`). |
+| `getRegion(name)` | tutorial | Returns the element for a tour step (`task`, `record`, `transcript`, `send`, `output`, `timer`, `finish` in the voice mode; the intents mode adds `intents` and `intentCard`; the customer mode adds `persona`, `ask`, `reactions`, `reactionCard` and `notes`). |
 | `onFinishRequest` | task | Set by the task screen; call it when the participant selects Finish Task. |
 | `isBusy()` | task | True while a recording, transcription or AI response is running. |
 | `setLocked(bool)` | task | Turns input off (for example at the time limit). |
@@ -331,8 +351,9 @@ export function tutorialSteps({ recordingMode }) { … }    // the tutorial tour
 Options:
 - `live: false` renders the same layout without input. The briefing backdrop and the tutorial use it.
 - `conceal` hides the task text.
-- `sample` provides `{ turns, draft, intents }` for the tutorial (`tutorial.sample` in the strings file; a mode uses what it needs).
+- `sample` provides `{ turns, draft, intents, scaffold, customer }` for the tutorial (`tutorial.sample` in the strings file; a mode uses what it needs). The customer mode shows the first sample turn with `customer.reactions` (quotes from it) and `customer.notes`, and takes its personas from `tutorial.sample.task.personas`.
 - `onTurn(turn)` is called after each finished AI response.
+- `onRecorded()` is called after each recording of the main record button that was transcribed (in the customer mode also after a response to a reaction). The tutorial uses it to make **Continue to the Tasks** (bottom right) available after the first practice recording.
 
 **Build the canvas on `core/conversation.js`.** It holds everything about talking to the assistant that doesn't depend on the input:
 - sending an instruction and streaming the response
@@ -341,11 +362,11 @@ Options:
 - logging (`ai.sent`, `ai.received`, `ai.failed`)
 - busy and idle: `isBusy()` and `whenIdle()` can be passed straight through to the canvas API
 
-A mode then only adds its input and its layout. It marks its own work with `conv.setBusy(key, on)`, so the task end waits for it; the voice mode does this for transcription. `conv.send(text, logPayload, body)` can pass extra fields to `/api/chat` (the intents mode sends `{ intentIds }`).
+A mode then only adds its input and its layout. It marks its own work with `conv.setBusy(key, on)`, so the task end waits for it; the voice mode does this for transcription. `conv.send(text, logPayload, body)` can pass extra fields to `/api/chat` (the intents mode sends `{ intentIds }`, the customer mode `{ customer: { reactionIds, noteIds } }`).
 
 **Shared canvas parts** in `public/js/core/canvas/`, used by both modes:
 - `taskPanel.js`: the task panel with Hide/Show Situation (open by default).
-- `latestResponse.js`: the latest response with "Version n" and "Updated … ago".
+- `latestResponse.js`: the latest response with "Version n" and "Updated … ago". `decorate(turn)` can replace the plain text of a finished response with nodes (the customer mode highlights passages).
 - `controls.js`: the bar with record button, level meter, send, finish and the timer slot.
 - `voiceInput.js`: one record button from recording to transcript (`onText`), with logging and busy marking. A mode can have several (the intents mode has one per card, with `keyboard: 'focus'` so Space only works on the focused button).
 
@@ -372,7 +393,7 @@ The **Dev Mode** panel at the top right (it can be collapsed) offers:
 - **Interaction mode:** switches the current session to another mode and shows the current step again in it. The default for new sessions is `interaction.mode` in `config.js`. Logged as `session.modeChanged`.
 - **Mock mode:** switches for Speech-to-text and the LLM.
   - Mock transcription returns the test sentence in the system check and canned instructions elsewhere.
-  - The mock LLM returns canned drafts. For intents it splits the comment at sentences and "and", and appends an annotation to the intent: enough to click through, not a real rewrite.
+  - The mock LLM returns canned drafts. For intents it splits the comment at sentences and "and", and appends an annotation to the intent: enough to click through, not a real rewrite. For the customer it picks three or four sentences spread over the actual draft, quotes their first words exactly and gives each a canned reaction that fits (money, opening, a request, anything else), varying from ask to ask.
   - Neither costs anything. Dev sessions start mocked when `dev.mockByDefault` is true.
 - **Jump to step:** go to any step of the flow.
 - **Timer speed:** 1×, 10× or 60×, to test time limits quickly. The choice is remembered in this browser.
@@ -420,18 +441,19 @@ Events (`server.*` and `session.*` come from the server; all others come from th
 | Session | `session.started` (with `mode`), `session.resumed`, `session.completed`, `session.invalidId`, `session.client` (browser, viewport), `session.modeChanged` (dev panel) |
 | Steps | `step.entered`, `step.left` (with reason), `step.error` |
 | System check | `systemCheck.check` (each check and its result), `systemCheck.passed`, `recording.*` with `context: 'systemCheck'` |
-| Tutorial | `tutorial.started`, `tutorial.step`, `tutorial.tourCompleted`, `tutorial.practiceStarted`, `tutorial.practiceTurn`, `tutorial.completed` |
+| Tutorial | `tutorial.started`, `tutorial.step`, `tutorial.tourCompleted`, `tutorial.practiceStarted`, `tutorial.practiceUnlocked` (reason: `recording`, `turn` or `resumed`), `tutorial.practiceTurn`, `tutorial.completed` |
 | Task | `task.started` (with `mode`), `taskPanel.opened`, `taskPanel.closed` (the task panel starts collapsed to its title), `task.finishRequested`, `task.finishCancelled`, `task.finished` (reason, elapsed time, turns) |
 | Timer | `timer.warning`, `timer.limit`, `timer.graceEnd` |
-| Recording | `recording.start`, `recording.stop` (duration, reason, size, format, peak level), `recording.error`. Intents mode: `target: 'instruction'` (first instruction), `'intents'` (new intents) or `'intent'` with `intentId` (a card's annotation); the same fields are on `transcript.*`. |
+| Recording | `recording.start`, `recording.stop` (duration, reason, size, format, peak level), `recording.error`. Intents mode: `target: 'instruction'` (first instruction), `'intents'` (new intents) or `'intent'` with `intentId` (a card's annotation). Customer mode: `target: 'note'` (a general instruction) or `'reaction'` with `reactionId` (a response). The same fields are on `transcript.*`. |
 | Transcription | `transcript.received` (length, latency), `transcript.empty`, `transcript.failed`, `draft.cleared` (the discarded text), `server.transcribe` (text, latency, size, format, audio file if stored) |
 | Intents | `scaffold.shown` (chars), `scaffold.failed`, `server.scaffold.shown` (**starting draft text**), `intents.extracted` (count, IDs, latency), `intents.extractFailed`, `intent.toggled` (ID, on/off, number on, state), `intent.toggleFailed`, `intent.quoteToggled` (ID, open), `intents.keptToggled` (open, count), `intent.annotated` (ID, latency), `intent.annotateFailed`, `server.intents.extracted` (**transcript, intent texts, reasons and quotes**), `server.intent.annotated` (**annotation, intent and reason before and after**) |
-| AI | `ai.sent` (length; intents mode: `step: 'first'` or `'intents'` with the intent IDs sent and the number switched off), `ai.received` (latency, first token; `resumed: true` if the response finished during a reload), `ai.failed`, `server.ai.request` (instruction, model, history length; intents mode: the intents sent, with their reasons), `server.ai.response` (**response text**, latency, token usage; `cleaned: true` and **`rawText`** when an introduction or closing comment of the model was removed) |
+| Customer | `customer.askStarted` (persona, version, reactions so far), `customer.reactionsReceived` (ask, persona, count, IDs, tones, passages not found, latency; `resumed: true` after a reload), `customer.askFailed`, `customer.askResumed`, `customer.personaChanged` (from, to), `customer.personaChangeFailed`, `customer.earlierToggled` (open, count), `reaction.toggled` (ID, on/off, tone, responses, number on), `reaction.toggleFailed`, `reaction.responded` (ID, length, latency), `reaction.respondFailed`, `reaction.located` (ID, from `card` or `passage`), `note.added`, `note.addFailed`, `note.toggled`, `server.customer.asked` (persona, version), `server.customer.reactions` (**reaction texts, tones and passages**, latency, token usage), `server.customer.personaChanged`, `server.customer.responded` (**response text**), `server.customer.note` (**instruction text**) |
+| AI | `ai.sent` (length; intents mode: `step: 'first'` or `'intents'` with the intent IDs sent and the number switched off; customer mode: `step: 'customer'` with reaction and instruction IDs, how many have a response, tones and the number switched off), `ai.received` (latency, first token; `resumed: true` if the response finished during a reload), `ai.failed`, `server.ai.request` (instruction, model, history length; intents mode: the intents sent, with their reasons; customer mode: the reactions with responses and the instructions sent), `server.ai.response` (**response text**, latency, token usage; `cleaned: true` and **`rawText`** when an introduction or closing comment of the model was removed) |
 | Questionnaire | `survey.submitted` (answers), `survey.externalOpened`, `survey.externalDone` |
 | End | `study.completed` |
 | Problems | `client.error` (uncaught errors, failed saves), `client.saveRecovered`, `client.smallScreen`, `server.error` (route, error code, detail) |
 
-Texts (transcripts, instructions, responses) are logged once, in the `server.*` events; the browser events carry lengths and timings. The complete conversation of each round is also stored with the session in `sessions/<sessionId>.json` (`rounds[round].turns`). It includes the instruction, response, times, latency and token usage. In the intents mode, `rounds[round].intents` holds every intent with its reason, quote, source transcript, annotations (before/after, with reasons), on/off state and the versions it was sent in.
+Texts (transcripts, instructions, responses) are logged once, in the `server.*` events; the browser events carry lengths and timings. The complete conversation of each round is also stored with the session in `sessions/<sessionId>.json` (`rounds[round].turns`). It includes the instruction, response, times, latency and token usage. In the intents mode, `rounds[round].intents` holds every intent with its reason, quote, source transcript, annotations (before/after, with reasons), on/off state and the versions it was sent in. In the customer mode, `rounds[round].customer` holds every ask (persona, version, timing), every reaction (passage, text, tone, on/off, responses, the versions it was used for) and every general instruction.
 
 ---
 
@@ -477,7 +499,7 @@ design-system/            Fiori Horizon export (don't edit; tokens.css is genera
 server/
   index.js                Express app, security headers, static files
   config/                 load + validate config, client-safe subset
-  routes/                 session, transcribe/health, chat (streaming), intents, log, dev
+  routes/                 session, transcribe/health, chat (streaming), intents, customer, log, dev
   services/               OpenAI calls, mocks, session store, task assignment
   middleware/             session check, rate limiting
   logger/                 logger interface + JSONL implementation
@@ -489,6 +511,7 @@ public/
   js/screens/             one module per screen: { mount(container, ctx), unmount() }
   js/modes/voice/         voice interaction mode: canvas + tutorial steps
   js/modes/intents/       intents interaction mode: canvas + tutorial steps
+  js/modes/customer/      customer interaction mode: canvas + tutorial steps
 dev-client/devPanel.js    dev panel (served only in dev mode)
 scripts/build-tokens.mjs  generates design-system/tokens.css
 ```

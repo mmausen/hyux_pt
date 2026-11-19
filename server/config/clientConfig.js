@@ -17,6 +17,8 @@ export function buildClientConfig({ config, env, modes }) {
     tutorial: { ...config.tutorial },
     timer: { ...config.timer },
     ai: { assistantName: config.ai.assistantName, timeoutSeconds: config.ai.timeoutSeconds },
+    // Customer mode: the persona for a task without personas (its prompt profile stays on the server).
+    customer: { defaultPersona: (({ id, name, role, about }) => ({ id, name, role, about }))(config.ai.customer.defaultPersona) },
     stt: { timeoutSeconds: config.stt.timeoutSeconds },
     systemCheck: {
       testSentence: config.systemCheck.testSentence,

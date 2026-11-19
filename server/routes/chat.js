@@ -2,12 +2,16 @@
 // earlier turns of the same round (if config.ai.sendHistory) and the new transcript. Never the task.
 // Intents mode: { round, intentIds } instead of text. The model then gets no history, only the latest
 // draft and the listed intents (config.ai.intents.reviseInstruction); the turn records which intents.
+// Customer mode: { round, customer: { reactionIds, noteIds } }. The model gets no history, only the latest
+// draft, the reader's reactions that are on (with the participant's responses) and the participant's general
+// instructions (config.ai.customer.reviseInstruction); the turn records them (turn.customer).
 // The server owns the conversation: turns are stored in session.rounds[round].turns.
 // Response: NDJSON stream of {type:'delta', text} … then {type:'done', turn} or {type:'error', error}.
 import { Router } from 'express';
 import { requireSession, useMock } from '../middleware/session.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { latestDraft } from './intents.js';
+import { customerRevision } from './customer.js';
 import { cleanResponse } from '../../public/js/core/cleanResponse.js';
 
 const MAX_CHARS = 4000;
@@ -27,9 +31,10 @@ export function chatRoutes(app) {
     const round = req.body?.round;
     let text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
     const intentIds = Array.isArray(req.body?.intentIds) ? req.body.intentIds : null;
+    const custIds = req.body?.customer && typeof req.body.customer === 'object' ? req.body.customer : null;
     // Round 0 is the tutorial practice turn; rounds 1..N are tasks.
     if (!Number.isInteger(round) || round < 0 || round > session.plan.length) return res.status(400).json({ error: 'bad_round' });
-    if (!intentIds && !text) return res.status(400).json({ error: 'empty' });
+    if (!intentIds && !custIds && !text) return res.status(400).json({ error: 'empty' });
     if (text.length > MAX_CHARS) return res.status(413).json({ error: 'too_long' });
 
     const key = String(round);
@@ -40,7 +45,24 @@ export function chatRoutes(app) {
     let history;
     let input;
     let intents = null;
-    if (intentIds) {
+    let customer = null; // { reactions, notes }: stored objects sent with this turn
+    let custRecord = null;
+    if (custIds) {
+      // Customer: the latest draft, the reactions that are on (with responses) and the general instructions.
+      const draft = latestDraft(roundData);
+      const cust = roundData.customer ?? { reactions: [], notes: [] };
+      const ids = (v) => (Array.isArray(v) ? v : []);
+      customer = {
+        reactions: cust.reactions.filter((x) => ids(custIds.reactionIds).includes(x.id)),
+        notes: cust.notes.filter((x) => ids(custIds.noteIds).includes(x.id)),
+      };
+      if (!customer.reactions.length && !customer.notes.length) return res.status(400).json({ error: 'no_changes' });
+      const rev = customerRevision(config, { ...customer, draft });
+      text = rev.text;
+      custRecord = rev.record;
+      history = [];
+      input = rev.input;
+    } else if (intentIds) {
       // Intents: the latest draft and the chosen intents, nothing else.
       const draft = latestDraft(roundData);
       intents = (roundData.intents ?? []).filter((x) => intentIds.includes(x.id));
@@ -61,12 +83,13 @@ export function chatRoutes(app) {
     }
     const turn = { n: roundData.turns.length + 1, transcript: text, response: '', status: 'pending', sentAt: new Date().toISOString() };
     if (intents) turn.intents = intents.map(({ id, text: t, reason }) => ({ id, text: t, reason: reason ?? '' }));
+    if (custRecord) turn.customer = custRecord;
     roundData.turns.push(turn);
     await store.update(session, (s) => { s.rounds[key] = roundData; });
 
     const service = useMock(req, env, 'llm') ? mock : ai;
     const log = logger.forSession(session, round);
-    log.write('server.ai.request', { turn: turn.n, model: service === mock ? 'mock' : config.ai.model, historyTurns: history.length / 2, chars: text.length, text, intents: turn.intents });
+    log.write('server.ai.request', { turn: turn.n, model: service === mock ? 'mock' : config.ai.model, historyTurns: history.length / 2, chars: text.length, text, intents: turn.intents, customer: turn.customer });
 
     res.status(200);
     res.set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
@@ -90,6 +113,7 @@ export function chatRoutes(app) {
       if (response !== out.text) turn.rawResponse = out.text;
       Object.assign(turn, { response, status: 'done', respondedAt: new Date().toISOString(), latencyMs: Date.now() - started, firstTokenMs, usage: out.usage ?? undefined, mock: service === mock || undefined });
       for (const x of intents ?? []) x.sentIn = [...(x.sentIn ?? []), turn.n];
+      for (const x of [...(customer?.reactions ?? []), ...(customer?.notes ?? [])]) x.sentIn = [...(x.sentIn ?? []), turn.n];
       await store.update(session, () => {});
       log.write('server.ai.response', {
         turn: turn.n, latencyMs: turn.latencyMs, firstTokenMs, chars: response.length, text: response,

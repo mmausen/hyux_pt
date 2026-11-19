@@ -9,8 +9,8 @@
 //   POST /api/intents/:id/annotate  { round, text }   spoken annotation → the intent, rewritten
 //   PUT  /api/intents/:id           { round, active } switch an intent on or off
 //
-// The starting draft (`scaffold` in data/tasks.json; for the practice round tutorial.practice.intents.task
-// in the strings file) is a generic outline of the task without any choices made. It is stored as turn 1
+// The starting draft (`scaffold` in data/tasks.json; for the practice round tutorial.practice.<mode>.task
+// in the strings file, else tutorial.practice.intents.task) is a generic outline of the task without any choices made. It is stored as turn 1
 // with kind 'scaffold' and becomes the first "current draft"; no LLM call is involved.
 // The LLM sees the prompt from config.ai.intents, the latest draft (to resolve "that part") and the
 // spoken text. Never the task or the situation (only what the starting draft says). Sending the active intents to the AI is /api/chat with intentIds.
@@ -55,11 +55,13 @@ export const latestDraft = (roundData) => [...(roundData?.turns ?? [])].reverse(
 export function intentRoutes(app) {
   const { config, env, store, logger, ai, mock, tasksById } = app;
   const r = Router();
-  // The practice round's starting draft lives in the strings file next to the practice task.
-  let practiceScaffold = '';
+  // The practice round's starting draft lives in the strings file next to the practice task: the one of
+  // the session's mode (tutorial.practice.<mode>.task.scaffold), else the intents one.
+  let practice = {};
   import(pathToFileURL(path.join(ROOT, 'content', `strings.${config.study.locale}.js`)).href)
-    .then((m) => { practiceScaffold = m.default?.tutorial?.practice?.intents?.task?.scaffold ?? ''; })
+    .then((m) => { practice = m.default?.tutorial?.practice ?? {}; })
     .catch(() => {});
+  const practiceScaffold = (mode) => practice[mode]?.task?.scaffold ?? practice.intents?.task?.scaffold ?? '';
   const limit = rateLimit({
     name: 'chat',
     windowMs: config.limits.rateLimit.windowSeconds * 1000,
@@ -97,7 +99,7 @@ export function intentRoutes(app) {
     const { round, key, roundData } = p;
     const first = roundData.turns[0];
     if (first) return res.json({ turn: first.kind === 'scaffold' ? first : null });
-    const scaffold = (round === 0 ? practiceScaffold : tasksById.get(roundData.taskId)?.scaffold ?? '').trim();
+    const scaffold = (round === 0 ? practiceScaffold(req.study.mode ?? config.interaction.mode) : tasksById.get(roundData.taskId)?.scaffold ?? '').trim();
     if (!scaffold) return res.json({ turn: null });
     const now = new Date().toISOString();
     const turn = { n: 1, kind: 'scaffold', transcript: '', response: scaffold, status: 'done', sentAt: now, respondedAt: now };
